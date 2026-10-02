@@ -37,8 +37,17 @@ class Settings(BaseSettings):
     gemini_transcription_model: str = "gemini-3.5-flash"
     gemini_summary_model: str = "gemini-3.5-flash"
     gemini_embedding_model: str = "gemini-embedding-2"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
-    cors_origin_regex: str | None = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "https://spruce.my,https://www.spruce.my,"
+        "http://spruce.my,http://www.spruce.my,"
+        "https://wwwillott.github.io"
+    )
+    cors_origin_regex: str | None = (
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+        r"|https?://(www\.)?spruce\.my"
+        r"|https://[\w-]+\.github\.io"
+    )
     max_upload_mb: int = 15
     openai_api_key: str | None = None
     openai_api: str | None = None

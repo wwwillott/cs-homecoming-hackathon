@@ -45,7 +45,7 @@ class AssistantPlace(BaseModel):
 class AssistantChatRequest(BaseModel):
     messages: list[AssistantMessage] = Field(min_length=1, max_length=40)
     session_id: str | None = Field(default=None, max_length=200)
-    context: str | None = Field(default=None, max_length=6_000)
+    context: str | None = Field(default=None, max_length=12_000)
     place: AssistantPlace | None = None
 
 

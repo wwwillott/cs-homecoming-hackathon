@@ -45,6 +45,37 @@ void main() {
     expect(contact.readOnly, isTrue);
   });
 
+  test('shortLabel prefers username and never shows My network', () {
+    expect(
+      const NetworkTree(
+        id: '1',
+        label: "My network's network",
+        isPrimary: false,
+        isReadOnly: true,
+        attributedUsername: 'maya',
+      ).shortLabel,
+      'maya',
+    );
+    expect(
+      const NetworkTree(
+        id: '2',
+        label: "My network's network",
+        isPrimary: false,
+        isReadOnly: true,
+      ).shortLabel,
+      'Them',
+    );
+    expect(
+      const NetworkTree(
+        id: '3',
+        label: "alex's network",
+        isPrimary: false,
+        isReadOnly: true,
+      ).shortLabel,
+      'alex',
+    );
+  });
+
   test('askTreeIds includes primary and attached trees in shared mode', () {
     final app = _testApp();
     app.attachSharedTreeForTest(
@@ -69,6 +100,54 @@ void main() {
     expect(app.isSharedMode, isFalse);
     expect(app.attachedContacts, isEmpty);
     expect(app.askTreeIds(), equals(['primary']));
+  });
+
+  test('networkBrief keeps shared-tree people even when own tree is large', () {
+    final own = [
+      for (var i = 0; i < 25; i++) Contact(id: 'own-$i', name: 'Own Person $i', company: 'Acme'),
+    ];
+    final shared = [
+      Contact(
+        id: 'shared-1',
+        name: 'Leo Chen',
+        company: 'Robotics Lab',
+        tags: const ['robotics'],
+        readOnly: true,
+      ),
+    ];
+
+    final brief = networkBrief(
+      contacts: own,
+      userName: 'Will',
+      sharedContacts: shared,
+      sharedLabel: 'maya',
+    );
+
+    expect(brief, contains("Will's network"));
+    expect(brief, contains('Shared mode is on'));
+    expect(brief, contains('Leo Chen'));
+    expect(brief, contains('[shared tree]'));
+    expect(brief, contains("maya's network"));
+    expect(brief, isNot(contains('Own Person 20')));
+  });
+
+  test('entering shared mode refreshes the Ask Spruce session', () {
+    final app = _testApp();
+    final before = app.assistantEpoch;
+    app.attachSharedTreeForTest(
+      tree: const NetworkTree(
+        id: 'attached-1',
+        label: "Maya's network",
+        isPrimary: false,
+        isReadOnly: true,
+        attributedUsername: 'maya',
+      ),
+      contacts: [Contact(id: 'p1', name: 'Priya', readOnly: true)],
+    );
+    expect(app.assistantEpoch, greaterThan(before));
+    final mid = app.assistantEpoch;
+    app.leaveSharedMode();
+    expect(app.assistantEpoch, greaterThan(mid));
   });
 
   testWidgets('shared mode uses one stage with two username anchors', (tester) async {

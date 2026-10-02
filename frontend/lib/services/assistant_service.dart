@@ -165,21 +165,88 @@ List<String> _withAlumni(List<String> prompts) {
   return [...prompts, alumniPromptChip];
 }
 
-/// A short snapshot of the local network, sent with the first live turn.
-String networkBrief({required List<Contact> contacts, required String userName}) {
+/// A short snapshot of the local network, sent with each live Ask Spruce turn.
+///
+/// When [sharedContacts] is non-empty, own and shared people are listed in
+/// separate sections so the model can answer about the attached tree.
+String networkBrief({
+  required List<Contact> contacts,
+  required String userName,
+  List<Contact> sharedContacts = const [],
+  String? sharedLabel,
+}) {
   final who = userName.trim().isEmpty ? 'The user' : userName.trim();
-  if (contacts.isEmpty) return '$who has not saved any contacts yet.';
-  final lines = contacts.take(20).map((contact) {
+  if (contacts.isEmpty && sharedContacts.isEmpty) {
+    return '$who has not saved any contacts yet.';
+  }
+
+  final ownBudget = sharedContacts.isEmpty ? 24 : 14;
+  final sharedBudget = 14;
+  final buffer = StringBuffer();
+
+  if (contacts.isEmpty) {
+    buffer.writeln('$who has no people in their own tree yet.');
+  } else {
+    buffer.writeln('$who\'s network (${contacts.length} people):');
+    buffer.write(_contactBriefLines(contacts.take(ownBudget)));
+    if (contacts.length > ownBudget) {
+      buffer.writeln('- …and ${contacts.length - ownBudget} more in their own tree.');
+    }
+  }
+
+  if (sharedContacts.isNotEmpty) {
+    final label = (sharedLabel == null || sharedLabel.trim().isEmpty)
+        ? 'the shared tree'
+        : sharedLabel.trim();
+    buffer.writeln();
+    buffer.writeln(
+      'Shared mode is on. A read-only copy of $label\'s network is attached '
+      '(${sharedContacts.length} people). Answer questions about these people too, '
+      'and say which tree someone belongs to when it matters:',
+    );
+    buffer.write(_contactBriefLines(sharedContacts.take(sharedBudget), shared: true));
+    if (sharedContacts.length > sharedBudget) {
+      buffer.writeln(
+        '- …and ${sharedContacts.length - sharedBudget} more in $label\'s tree.',
+      );
+    }
+  }
+
+  return buffer.toString().trimRight();
+}
+
+String _contactBriefLines(Iterable<Contact> contacts, {bool shared = false}) {
+  final lines = <String>[];
+  for (final contact in contacts) {
     final role = switch ((contact.title.isNotEmpty, contact.company.isNotEmpty)) {
       (true, true) => '${contact.title} at ${contact.company}',
       (true, false) => contact.title,
       (false, true) => contact.company,
       _ => '',
     };
+    final tags = [
+      if (contact.tags.isNotEmpty) contact.tags.take(3).join(', '),
+      if (contact.skills.isNotEmpty) contact.skills.take(2).join(', '),
+    ].where((item) => item.isNotEmpty).join('; ');
     final met = contact.metAt.isEmpty ? '' : ' Met at ${contact.metAt}.';
-    return '- ${contact.name}${role.isEmpty ? '' : ', $role'}.$met';
-  });
-  return '$who knows ${contacts.length} people:\n${lines.join('\n')}';
+    final notes = contact.notes.trim().isEmpty
+        ? ''
+        : ' Notes: ${contact.notes.trim().split('\n').first}';
+    final hooks = contact.conversationHooks.trim().isEmpty
+        ? ''
+        : ' Hooks: ${contact.conversationHooks.trim().split('\n').first}';
+    final marker = shared ? ' [shared tree]' : '';
+    final detail = [
+      if (role.isNotEmpty) role,
+      if (tags.isNotEmpty) tags,
+    ].join('. ');
+    lines.add(
+      '- ${contact.name}$marker'
+      '${detail.isEmpty ? '' : ', $detail.'}'
+      '$met$notes$hooks',
+    );
+  }
+  return '${lines.join('\n')}\n';
 }
 
 /// A few apps for the Ask Spruce chip. A smaller tree gets places to meet
@@ -322,6 +389,9 @@ class MockAssistantService implements AssistantService {
   }
 
   String _aboutPerson(List<Contact> list, Contact c, String q) {
+    final treeNote = c.readOnly
+        ? ' ${c.firstName} is from the shared tree currently attached to your view.'
+        : '';
     if (q.contains('message') || q.contains('write') || q.contains('email')) {
       final where = c.metAt.isEmpty ? 'recently' : 'at ${c.metAt}';
       final hook = c.conversationHooks.isEmpty ? '' : ' ${c.conversationHooks.split('.').first.trim()}.';
@@ -329,17 +399,20 @@ class MockAssistantService implements AssistantService {
           '"Hi ${c.firstName}, it was great meeting you $where. I really enjoyed hearing about your work'
           '${c.company.isEmpty ? '' : ' at ${c.company}'}. I\'d love to keep in touch and grab a quick coffee sometime if you\'re open to it."\n\n'
           'Something personal you noted that could make it warmer:$hook'
-          '${hook.isEmpty ? ' nothing yet, so keep it simple.' : ''}';
+          '${hook.isEmpty ? ' nothing yet, so keep it simple.' : ''}'
+          '$treeNote';
     }
     final friends = _neighbors(list, c)..sort((a, b) => b.strength.compareTo(a.strength));
     if (friends.isEmpty) {
-      return '${c.name} isn\'t connected to anyone else in your network yet. '
+      return '${c.name} isn\'t connected to anyone else in the visible network yet.'
+          '$treeNote '
           'Ask who else they\'d recommend you meet, then add those people so I can map the links.';
     }
     final names = friends.take(5).map((f) => '• ${f.name}${f.roleLine.isEmpty ? '' : ', ${f.roleLine}'}').join('\n');
-    return '${c.firstName} knows ${friends.length} ${friends.length == 1 ? 'person' : 'people'} in your network:\n\n$names\n\n'
+    return '${c.firstName} knows ${friends.length} ${friends.length == 1 ? 'person' : 'people'} nearby:\n\n$names\n\n'
         '${c.canRefer ? '${c.firstName} has offered to help, so a direct ask is fair. ' : ''}'
-        'Ask for one specific intro rather than "anyone you know". It\'s much easier to say yes to.';
+        'Ask for one specific intro rather than "anyone you know". It\'s much easier to say yes to.'
+        '$treeNote';
   }
 
   String _aboutCompany(List<Contact> list, String company) {
@@ -386,11 +459,17 @@ class MockAssistantService implements AssistantService {
   String _overview(List<Contact> list) {
     final strongest = [...list]..sort((a, b) => b.strength.compareTo(a.strength));
     final hub = _hub(list);
+    final shared = list.where((c) => c.readOnly).toList();
     final name = userName().isEmpty ? '' : ', ${userName()}';
-    return 'Here\'s a quick read on your network$name. You have ${list.length} people. '
+    final sharedLine = shared.isEmpty
+        ? ''
+        : ' ${shared.length} ${shared.length == 1 ? 'person is' : 'people are'} from the attached shared tree'
+            '${shared.isEmpty ? '' : ' (for example ${shared.first.name})'}.';
+    return 'Here\'s a quick read on your network$name. You can see ${list.length} people right now.'
+        '$sharedLine '
         'Your strongest ties are ${strongest.take(3).map((c) => c.firstName).join(', ')}.'
         '${hub == null ? '' : ' ${hub.firstName} is your biggest connector and knows ${_neighbors(list, hub).length} people you know.'}\n\n'
-        'Ask me about a person, a company, or an event and I\'ll pull up what you know.';
+        'Ask me about a person, company, or who to introduce across the trees.';
   }
 
   Contact? _mentioned(List<Contact> list, String q) {

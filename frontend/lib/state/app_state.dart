@@ -55,13 +55,12 @@ class AppState extends ChangeNotifier {
   late final RecapService _liveRecap = ApiRecapService(userId: () => userId);
   late final RecapService _demoRecap = MockRecapService();
   late final ApiAssistantService _liveAssistant = ApiAssistantService(
-    networkContext: () {
-      final shared = activeSharedTree;
-      final brief = networkBrief(contacts: visibleContacts, userName: userName);
-      if (shared == null) return brief;
-      return '$brief\n\nShared mode is on with ${shared.label}. '
-          'People from that attached tree are included above and marked read-only.';
-    },
+    networkContext: () => networkBrief(
+      contacts: contacts,
+      userName: userName,
+      sharedContacts: attachedContacts,
+      sharedLabel: activeSharedTree?.shortLabel ?? activeSharedTree?.label,
+    ),
     place: () => {'city': city, 'state': homeState, 'university': university},
     sharedLabel: () => activeSharedTree?.shortLabel,
   );
@@ -546,6 +545,7 @@ class AppState extends ChangeNotifier {
     _attachedContacts = await networkTrees.loadTreeContacts(tree.id);
     await refreshTrees();
     await refreshIntroductionSuggestions();
+    _refreshAssistantForSharedMode();
     notifyListeners();
   }
 
@@ -557,7 +557,14 @@ class AppState extends ChangeNotifier {
     if (graphFocusId != null && !_byId.containsKey(graphFocusId)) {
       graphFocusId = null;
     }
+    _refreshAssistantForSharedMode();
     notifyListeners();
+  }
+
+  /// Drop the prior Ask Spruce session so the next turn gets both trees.
+  void _refreshAssistantForSharedMode() {
+    assistantEpoch++;
+    assistant.reset();
   }
 
   /// Test helper for dual-tree UI without the backend.
@@ -578,6 +585,7 @@ class AppState extends ChangeNotifier {
     ];
     activeSharedTree = tree;
     _attachedContacts = contacts;
+    _refreshAssistantForSharedMode();
     notifyListeners();
   }
 

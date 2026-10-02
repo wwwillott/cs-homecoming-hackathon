@@ -250,15 +250,21 @@ class OrbitAgent:
                 f"{item.get('role', 'user')}: {item.get('text', '')}" for item in history[:-1]
             )
             latest = f"Conversation so far:\n{earlier}\n\nLatest message:\n{latest}"
-        yield from self.send(latest, context=None if self.session_id else context)
+        # Always attach the latest network snapshot so shared-mode trees stay in scope.
+        yield from self.send(latest, context=context)
 
     def send(self, text: str, *, context: str | None = None) -> Iterator[str]:
         """Stream one user message. Creates the session on the first call."""
         message = self._prepare(text)
         if self.session_id is None:
             message = f"{self.location.context_line()}\n\n{message}"
-            if context and context.strip():
-                message = f"The user's network, for context:\n{context.strip()}\n\n{message}"
+        if context and context.strip():
+            label = (
+                "The user's network, for context"
+                if self.session_id is None
+                else "Updated network context (own tree + any attached shared tree)"
+            )
+            message = f"{label}:\n{context.strip()}\n\n{message}"
         if self.session_id is None:
             yield from self._start(message)
             return

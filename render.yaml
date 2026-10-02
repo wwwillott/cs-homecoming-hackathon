@@ -14,9 +14,10 @@ services:
       - key: PORT
         value: "8000"
       - key: CORS_ORIGINS
-        value: https://spruce.my,https://www.spruce.my
+        # HTTP is required until GitHub Pages finishes issuing the spruce.my TLS cert.
+        value: https://spruce.my,https://www.spruce.my,http://spruce.my,http://www.spruce.my,https://wwwillott.github.io
       - key: CORS_ORIGIN_REGEX
-        value: https://(www\.)?spruce\.my
+        value: https?://(www\.)?spruce\.my|https://[\w-]+\.github\.io
       - key: DATABASE_URL
         sync: false
       - key: OPENAI_API_KEY

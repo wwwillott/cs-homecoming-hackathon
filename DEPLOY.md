@@ -46,6 +46,7 @@ dig +short api.spruce.my
 ```
 
 After Pages DNS works: GitHub → **Settings → Pages → Enforce HTTPS**.
+If the browser warns that the `spruce.my` certificate is for `*.github.io`, HTTPS is not ready yet — use `http://spruce.my` until GitHub finishes issuing the cert. The API allows both origins.
 
 ---
 
