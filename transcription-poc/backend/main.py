@@ -44,7 +44,14 @@ class Settings(BaseSettings):
     openai_api: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=(str(Path(__file__).resolve().parents[2] / ".env"), ".env"),
+        env_file=(
+            *(
+                (str(Path(__file__).resolve().parents[2] / ".env"),)
+                if len(Path(__file__).resolve().parents) > 2
+                else ()
+            ),
+            ".env",
+        ),
         extra="ignore",
     )
 
