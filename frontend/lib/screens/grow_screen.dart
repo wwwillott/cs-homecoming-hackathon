@@ -292,6 +292,8 @@ class _AssistantDockState extends State<AssistantDock> {
   bool _sending = false;
   String _streaming = '';
   StreamSubscription<String>? _sub;
+  int _generation = 0;
+  int _seenEpoch = -1;
 
   @override
   void dispose() {
@@ -342,7 +344,9 @@ class _AssistantDockState extends State<AssistantDock> {
   }
 
   void _newChat() {
+    _generation++;
     _sub?.cancel();
+    AppScope.read(context).assistant.reset();
     setState(() {
       _messages.clear();
       _sending = false;
@@ -362,10 +366,20 @@ class _AssistantDockState extends State<AssistantDock> {
       _streaming = '';
     });
     final app = AppScope.read(context);
+    final generation = _generation;
     _sub = app.assistant.reply(List.of(_messages)).listen(
-      (chunk) => setState(() => _streaming += chunk),
-      onDone: () => _finish(_streaming),
-      onError: (_) => _finish('Sorry, I couldn\'t reach the assistant. Try again in a moment.'),
+      (chunk) {
+        if (!mounted || generation != _generation) return;
+        setState(() => _streaming += chunk);
+      },
+      onDone: () {
+        if (!mounted || generation != _generation) return;
+        _finish(_streaming);
+      },
+      onError: (_) {
+        if (!mounted || generation != _generation) return;
+        _finish('Sorry, I couldn\'t reach the assistant. Try again in a moment.');
+      },
       cancelOnError: true,
     );
   }
@@ -383,6 +397,24 @@ class _AssistantDockState extends State<AssistantDock> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final open = app.assistantOpen;
+    if (_seenEpoch < 0) {
+      _seenEpoch = app.assistantEpoch;
+    } else if (_seenEpoch != app.assistantEpoch) {
+      final epoch = app.assistantEpoch;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _seenEpoch == epoch) return;
+        _generation++;
+        _seenEpoch = epoch;
+        _sub?.cancel();
+        setState(() {
+          _messages.clear();
+          _sending = false;
+          _streaming = '';
+          _suggestions = null;
+        });
+        _loadSuggestions();
+      });
+    }
     if (open && _suggestions == null && !_loadingSuggestions) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadSuggestions());
     }
@@ -445,7 +477,10 @@ class _AssistantDockState extends State<AssistantDock> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Spruce', style: context.tt.titleSmall),
-                    Text('Knows your network', style: context.tt.bodySmall?.copyWith(color: oc.subtle)),
+                    Text(
+                      app.demoMode ? 'Demo mode · sample answers' : 'Live AI · knows your network',
+                      style: context.tt.bodySmall?.copyWith(color: oc.subtle),
+                    ),
                   ],
                 ),
               ),

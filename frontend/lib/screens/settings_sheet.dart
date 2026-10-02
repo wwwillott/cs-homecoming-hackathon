@@ -66,6 +66,18 @@ class _SettingsBody extends StatelessWidget {
             onSelectionChanged: (s) => app.setThemeMode(s.first),
           ),
           const SizedBox(height: 18),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Demo mode'),
+            subtitle: Text(
+              app.demoMode
+                  ? 'Sample voice and assistant answers stay on this device.'
+                  : 'Live transcription and the AI assistant are on.',
+            ),
+            value: app.demoMode,
+            onChanged: app.setDemoMode,
+          ),
+          const SizedBox(height: 8),
           const Divider(),
           const SizedBox(height: 6),
           _ActionRow(

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../models/contact.dart';
-import '../models/user_mode.dart';
 import '../navigation.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/common.dart';
+import '../widgets/network_tree.dart';
 import 'settings_sheet.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -68,11 +68,9 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     header,
                     const SizedBox(height: 24),
-                    const FadeSlideIn(index: 0, child: _Summary()),
-                    const SizedBox(height: 16),
-                    const FadeSlideIn(index: 1, child: _CapturePrompt()),
+                    const FadeSlideIn(index: 0, child: HomeTreeCard()),
                     const SizedBox(height: 28),
-                    const FadeSlideIn(index: 2, child: _RecentlyMet()),
+                    const FadeSlideIn(index: 1, child: _RecentlyMet()),
                   ],
                 ),
               ),
@@ -114,122 +112,6 @@ class _Header extends StatelessWidget {
             icon: const Icon(Icons.settings_outlined),
           ),
       ],
-    );
-  }
-}
-
-class _Summary extends StatelessWidget {
-  const _Summary();
-
-  @override
-  Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    final c = app.contacts;
-    final places = c.map((x) => x.metAt).where((m) => m.isNotEmpty).toSet().length;
-    final strong = c.where((x) => x.strength >= 8).length;
-    final recruiter = app.mode == UserMode.recruiter;
-    final items = [
-      (c.length, 'People'),
-      (strong, recruiter ? 'Standouts' : 'Strong ties'),
-      (places, 'Places met'),
-    ];
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Row(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0) Container(width: 1, height: 36, color: context.oc.border),
-              Expanded(child: _Stat(value: items[i].$1, label: items[i].$2)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label});
-  final int value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: value.toDouble()),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.easeOutCubic,
-          builder: (context, v, _) => Text(
-            '${v.round()}',
-            style: context.tt.headlineSmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: context.tt.bodySmall?.copyWith(color: context.oc.muted)),
-      ],
-    );
-  }
-}
-
-class _CapturePrompt extends StatelessWidget {
-  const _CapturePrompt();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.deepSpruce, AppColors.spruce, Color(0xFF4E9E36)],
-        ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => openCapture(context),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: AppColors.mistCream.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.graphic_eq_rounded, color: AppColors.mistCream, size: 26),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Just met someone?',
-                        style: context.tt.titleMedium?.copyWith(color: AppColors.mistCream),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Record a 30-second recap. We\'ll draft their profile for you to review.',
-                        style: context.tt.bodySmall?.copyWith(color: AppColors.mistCream.withValues(alpha: 0.82)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.arrow_forward_rounded, color: AppColors.mistCream),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

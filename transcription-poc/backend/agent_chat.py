@@ -8,11 +8,11 @@ import sys
 import threading
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Literal
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
@@ -133,6 +133,7 @@ async def assistant_chat(payload: AssistantChatRequest, request: Request) -> Str
                 yield _sse({"done": True, "session_id": agent.session_id})
             except Exception:
                 logger.exception("assistant turn failed")
+                registry.remember(agent)
                 yield _sse({"error": "The assistant could not finish that reply."})
 
     return StreamingResponse(

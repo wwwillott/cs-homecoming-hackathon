@@ -39,7 +39,7 @@ dependencies:
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3
-  flutter_svg: ^2.3.0
+  path_parsing: ^1.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -61,9 +61,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  assets:
-    - assets/images/network_tree.svg
 
   fonts:
     - family: Inter

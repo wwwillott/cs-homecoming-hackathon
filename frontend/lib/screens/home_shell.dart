@@ -73,7 +73,7 @@ class HomeShell extends StatelessWidget {
           destinations: [
             for (final d in _destinations)
               NavigationDestination(
-                icon: Icon(d.icon),
+                icon: _TabIcon(dest: d, child: Icon(d.icon)),
                 selectedIcon: Icon(d.selectedIcon),
                 label: d.shortLabel ?? d.label,
               ),
@@ -342,6 +342,27 @@ class AddContactFab extends StatelessWidget {
   }
 }
 
+/// Adds the "!" to the Home tab while a tree growth is waiting to be watched there.
+class _TabIcon extends StatelessWidget {
+  const _TabIcon({required this.dest, required this.child});
+  final _Dest dest;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final alert = dest == _destinations.first && app.treeGrowthPending && app.tab != AppTab.home;
+    return Badge(
+      isLabelVisible: alert,
+      label: const Text('!', style: TextStyle(fontWeight: FontWeight.w800)),
+      backgroundColor: AppColors.amber,
+      textColor: const Color(0xFF2A1B00),
+      offset: const Offset(8, -6),
+      child: child,
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.dest,
@@ -372,7 +393,10 @@ class _NavItem extends StatelessWidget {
       child: Row(
         mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
-          Icon(selected ? dest.selectedIcon : dest.icon, size: 22, color: selected ? primary : oc.muted),
+          _TabIcon(
+            dest: dest,
+            child: Icon(selected ? dest.selectedIcon : dest.icon, size: 22, color: selected ? primary : oc.muted),
+          ),
           if (extended) ...[
             const SizedBox(width: 14),
             Text(

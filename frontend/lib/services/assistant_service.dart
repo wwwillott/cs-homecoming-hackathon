@@ -171,34 +171,42 @@ class MockAssistantService implements AssistantService {
   final String Function() userName;
 
   @override
+  void reset() {}
+
+  @override
   Future<List<String>> suggestedPrompts() async {
     await Future<void>.delayed(const Duration(milliseconds: 700));
     final list = contacts();
     if (list.isEmpty) {
-      return const [
+      return _prompts(const [
         'Where can I meet people in my field this month?',
         'What should I say when I introduce myself at an event?',
         'How do I follow someone up on LinkedIn without being awkward?',
-      ];
+      ]);
     }
     final hub = _hub(list);
     final company = _top(list.where((c) => c.canRefer).map((c) => c.company));
     final event = _top(list.map((c) => c.metAt));
     final recent = [...list.where((c) => c.metOn != null)]..sort((a, b) => b.metOn!.compareTo(a.metOn!));
     if (mode() == UserMode.recruiter) {
-      return [
+      return _prompts([
         'Who are my top candidates right now?',
         if (event != null) 'Who stood out at $event?',
         if (hub != null) 'Who could ${hub.firstName} introduce me to?',
         'Where should I go to meet more strong candidates?',
-      ];
+      ]);
     }
-    return [
+    return _prompts([
       if (hub != null) 'Who could ${hub.firstName} introduce me to?',
       if (company != null) 'How do I get a referral at $company?',
       if (recent.isNotEmpty) 'Help me write a message to ${recent.first.firstName}',
       'Which events should I go to next?',
-    ];
+    ]);
+  }
+
+  List<String> _prompts(List<String> prompts) {
+    const chip = 'Find events near me';
+    return [chip, ...prompts.where((prompt) => prompt != chip)];
   }
 
   @override

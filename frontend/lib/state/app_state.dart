@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,29 +28,49 @@ enum SortBy {
 class AppState extends ChangeNotifier {
   AppState({ContactRepository? repository, RecapService? recapService, AssistantService? assistant})
       : repository = repository ?? LocalContactRepository(),
-        recapService = recapService ?? ApiRecapService(),
+        _injectedRecap = recapService,
         _customAssistant = assistant;
 
   final ContactRepository repository;
-  final RecapService recapService;
+  final RecapService? _injectedRecap;
   final AssistantService? _customAssistant;
+  late final RecapService _liveRecap = _injectedRecap ?? ApiRecapService();
+  late final RecapService _demoRecap = MockRecapService();
+  late final ApiAssistantService _liveAssistant = ApiAssistantService(
+    networkContext: () => networkBrief(contacts: _contacts, userName: userName),
+  );
+  late final MockAssistantService _mockAssistant = MockAssistantService(
+    contacts: () => _contacts,
+    mode: () => mode,
+    userName: () => userName,
+  );
   late final AssistantService assistant = _customAssistant ??
-      ApiAssistantService(
-        fallback: MockAssistantService(
-          contacts: () => _contacts,
-          mode: () => mode,
-          userName: () => userName,
-        ),
+      ModeAssistantService(
+        demoMode: () => demoMode,
+        live: _liveAssistant,
+        demo: _mockAssistant,
       );
+
+  RecapService get recapService => _injectedRecap ?? (demoMode ? _demoRecap : _liveRecap);
   final navigatorKey = GlobalKey<NavigatorState>();
 
   static const _kOnboarded = 'orbit.onboarded';
   static const _kMode = 'orbit.mode';
   static const _kTheme = 'orbit.theme';
   static const _kName = 'orbit.userName';
+  static const _kDemo = 'orbit.demoMode';
+  static const _kTreeLevel = 'orbit.treeGoalsSeen';
+  static const _firstTreeGoals = [5, 10, 15, 25, 30];
+
+  /// Network-size goals that grow the tree: 5, 10, 15, 25, 30, then every 10.
+  static int treeGoal(int index) => index < _firstTreeGoals.length
+      ? _firstTreeGoals[index]
+      : _firstTreeGoals.last + 10 * (index - _firstTreeGoals.length + 1);
 
   bool loaded = false;
   bool onboarded = false;
+  bool demoMode = false;
+  int assistantEpoch = 0;
   UserMode mode = UserMode.seeker;
   ThemeMode themeMode = ThemeMode.system;
   String userName = '';
@@ -59,6 +80,39 @@ class AppState extends ChangeNotifier {
 
   List<Contact> get contacts => _contacts;
   Contact? byId(String? id) => id == null ? null : _byId[id];
+
+  int _treeLevelSeen = 0;
+
+  /// Number of network-size goals reached.
+  int get treeLevel {
+    var level = 0;
+    while (_contacts.length >= treeGoal(level)) {
+      level++;
+    }
+    return level;
+  }
+
+  /// Level currently drawn; lags [treeLevel] until the user watches it grow.
+  int get shownTreeLevel => math.min(_treeLevelSeen, treeLevel);
+
+  bool get treeGrowthPending => treeLevel > _treeLevelSeen;
+
+  int get nextTreeGoal => treeGoal(treeLevel);
+  int get previousTreeGoal => treeLevel == 0 ? 0 : treeGoal(treeLevel - 1);
+  int get connectionsToNextGrowth => nextTreeGoal - _contacts.length;
+  double get treeGoalProgress =>
+      (_contacts.length - previousTreeGoal) / (nextTreeGoal - previousTreeGoal);
+
+  void markTreeGrown() {
+    if (!treeGrowthPending) return;
+    _setTreeLevelSeen(treeLevel);
+  }
+
+  void _setTreeLevelSeen(int level) {
+    _treeLevelSeen = math.max(level, 0);
+    notifyListeners();
+    SharedPreferences.getInstance().then((p) => p.setInt(_kTreeLevel, _treeLevelSeen));
+  }
 
   AppTab tab = AppTab.home;
   String? selectedContactId;
@@ -78,7 +132,9 @@ class AppState extends ChangeNotifier {
       orElse: () => ThemeMode.system,
     );
     userName = prefs.getString(_kName) ?? '';
+    demoMode = prefs.getBool(_kDemo) ?? false;
     _setContacts(await repository.loadAll());
+    _treeLevelSeen = prefs.getInt(_kTreeLevel) ?? treeLevel;
     loaded = true;
     notifyListeners();
   }
@@ -104,7 +160,7 @@ class AppState extends ChangeNotifier {
       _setContacts([]);
     }
     tab = AppTab.home;
-    notifyListeners();
+    _setTreeLevelSeen(withDemoData ? treeLevel - 1 : treeLevel);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnboarded, true);
     await prefs.setString(_kMode, mode.name);
@@ -116,18 +172,22 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     onboarded = false;
+    demoMode = false;
+    assistantEpoch++;
     selectedContactId = null;
     graphFocusId = null;
     _setContacts([]);
+    _treeLevelSeen = 0;
     tab = AppTab.home;
     notifyListeners();
   }
 
+  /// The sample network leaves its last growth unwatched so the reveal can be demoed.
   void loadDemoData() {
     _setContacts(buildDemoContacts());
     selectedContactId = null;
     graphFocusId = null;
-    notifyListeners();
+    _setTreeLevelSeen(treeLevel - 1);
     _persist();
   }
 
@@ -136,6 +196,15 @@ class AppState extends ChangeNotifier {
     mode = value;
     notifyListeners();
     SharedPreferences.getInstance().then((p) => p.setString(_kMode, value.name));
+  }
+
+  void setDemoMode(bool value) {
+    if (demoMode == value) return;
+    demoMode = value;
+    assistantEpoch++;
+    assistant.reset();
+    notifyListeners();
+    SharedPreferences.getInstance().then((prefs) => prefs.setBool(_kDemo, value));
   }
 
   void setThemeMode(ThemeMode value) {
@@ -281,7 +350,12 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    unawaited(recapService.dispose());
+    if (_injectedRecap != null) {
+      unawaited(_injectedRecap.dispose());
+    } else {
+      unawaited(_liveRecap.dispose());
+      unawaited(_demoRecap.dispose());
+    }
     super.dispose();
   }
 }

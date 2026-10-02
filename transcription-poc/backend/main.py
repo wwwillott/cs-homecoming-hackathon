@@ -11,7 +11,8 @@ from google.auth.exceptions import GoogleAuthError
 from google.genai.errors import APIError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from agent_chat import build_registry, router as assistant_router
+from agent_chat import build_registry
+from agent_chat import router as assistant_router
 from database.session import AsyncSessionFactory
 from models import (
     CapabilitiesResponse,
@@ -98,7 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(network_router)
     app.include_router(streaming_router)
-    app.include_router(assistant_router
+    app.include_router(assistant_router)
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:

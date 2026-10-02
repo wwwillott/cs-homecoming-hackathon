@@ -8,7 +8,6 @@ import '../navigation.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
-import '../widgets/network_tree.dart';
 import 'contact_detail_screen.dart';
 
 class NetworkScreen extends StatefulWidget {
@@ -73,7 +72,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
             focusId: app.graphFocusId,
             onFocusChanged: (id) => _onFocus(app, id),
             controller: _graph,
-            fitPadding: EdgeInsets.fromLTRB(32, narrow ? 120 : 96, narrow ? 32 : 190, narrow ? 220 : 60),
+            fitPadding: EdgeInsets.fromLTRB(32, narrow ? 84 : 96, 32, narrow ? 190 : 60),
           ),
         ),
         Positioned(
@@ -87,39 +86,13 @@ class _NetworkScreenState extends State<NetworkScreen> {
               child: _TopBar(
                 compact: narrow,
                 contacts: contacts,
-                links: styler.edges.length,
                 onSearch: () => _openSearch(context, app),
                 onFit: _graph.fitToView,
               ),
             ),
           ),
         ),
-        if (!narrow)
-          Positioned(
-            right: 20,
-            bottom: 24,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _ZoomControls(controller: _graph),
-                const SizedBox(height: 14),
-                const NetworkTreeBadge(),
-              ],
-            ),
-          )
-        else
-          Positioned(
-            right: 16,
-            bottom: 142,
-            child: IgnorePointer(
-              ignoring: focus != null,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 250),
-                opacity: focus != null ? 0 : 1,
-                child: const NetworkTreeBadge(width: 76),
-              ),
-            ),
-          ),
+        if (!narrow) Positioned(right: 20, bottom: 24, child: _ZoomControls(controller: _graph)),
         Positioned(
           left: narrow ? 14 : 24,
           bottom: narrow ? 14 : 24,
@@ -155,7 +128,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         ? Padding(
                             key: const ValueKey('legend'),
                             padding: const EdgeInsets.only(bottom: 8),
-                            child: _Legend(styler: styler),
+                            child: _Legend(styler: styler, app: app),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -247,113 +220,59 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.compact,
     required this.contacts,
-    required this.links,
     required this.onSearch,
     required this.onFit,
   });
 
   final bool compact;
   final List<Contact> contacts;
-  final int links;
   final VoidCallback onSearch;
   final VoidCallback onFit;
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    final controls = [
-      _OptionMenu<ColorBy>(
-        prefix: 'Color',
-        icon: Icons.palette_outlined,
-        value: app.colorBy,
-        values: ColorBy.values,
-        label: (v) => v.label,
-        iconOf: (v) => v.icon,
-        onSelected: app.setColorBy,
-        compact: compact,
-      ),
-      _OptionMenu<SizeBy>(
-        prefix: 'Size',
-        icon: Icons.bubble_chart_outlined,
-        value: app.sizeBy,
-        values: SizeBy.values,
-        label: (v) => v.label,
-        iconOf: (v) => v.icon,
-        onSelected: app.setSizeBy,
-        compact: compact,
-      ),
-      _GlassButton(
-        tooltip: app.showPeerLinks ? 'Hide who-knows-who links' : 'Show who-knows-who links',
-        active: app.showPeerLinks,
-        onTap: () => app.setShowPeerLinks(!app.showPeerLinks),
-        child: const Icon(Icons.share_outlined, size: 18),
-      ),
-      _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
-      if (compact)
-        _GlassButton(
-          tooltip: 'Fit to screen',
-          onTap: onFit,
-          child: const Icon(Icons.center_focus_strong_outlined, size: 19),
-        ),
-    ];
-
-    final title = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Your Tree', style: context.tt.headlineSmall),
-        const SizedBox(height: 2),
-        Text('${contacts.length} people · $links mutual links', style: context.tt.bodySmall),
-      ],
-    );
-
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          title,
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              children: [
-                for (var i = 0; i < controls.length; i++) ...[if (i > 0) const SizedBox(width: 8), controls[i]],
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
+    final count = contacts.length;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        title,
-        const Spacer(),
-        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: controls),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Your Tree', style: context.tt.headlineSmall),
+              const SizedBox(height: 2),
+              Text(count == 1 ? '1 person' : '$count people', style: context.tt.bodySmall),
+            ],
+          ),
+        ),
+        _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
+        if (compact) ...[
+          const SizedBox(width: 8),
+          _GlassButton(
+            tooltip: 'Fit to screen',
+            onTap: onFit,
+            child: const Icon(Icons.center_focus_strong_outlined, size: 19),
+          ),
+        ],
       ],
     );
   }
 }
 
 class _GlassButton extends StatelessWidget {
-  const _GlassButton({required this.child, required this.onTap, this.tooltip, this.active = false});
+  const _GlassButton({required this.child, required this.onTap, this.tooltip});
   final Widget child;
   final VoidCallback onTap;
   final String? tooltip;
-  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    final primary = context.cs.primary;
     final button = Material(
-      color: active
-          ? primary.withValues(alpha: context.isDark ? 0.25 : 0.12)
-          : context.oc.surface.withValues(alpha: 0.92),
+      color: context.oc.surface.withValues(alpha: 0.92),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: active ? primary.withValues(alpha: 0.4) : context.oc.border),
+        side: BorderSide(color: context.oc.border),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -362,7 +281,7 @@ class _GlassButton extends StatelessWidget {
           height: 40,
           width: 40,
           child: IconTheme(
-            data: IconThemeData(color: active ? primary : context.oc.ink),
+            data: IconThemeData(color: context.oc.ink),
             child: Center(child: child),
           ),
         ),
@@ -372,81 +291,71 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
-class _OptionMenu<T> extends StatelessWidget {
-  const _OptionMenu({
-    required this.prefix,
-    required this.icon,
+class _OptionRow<T> extends StatelessWidget {
+  const _OptionRow({
+    required this.title,
     required this.value,
     required this.values,
     required this.label,
     required this.iconOf,
     required this.onSelected,
-    required this.compact,
   });
 
-  final String prefix;
-  final IconData icon;
+  final String title;
   final T value;
   final List<T> values;
   final String Function(T) label;
   final IconData Function(T) iconOf;
   final ValueChanged<T> onSelected;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
-    return PopupMenuButton<T>(
-      tooltip: '$prefix by',
-      initialValue: value,
-      onSelected: onSelected,
-      position: PopupMenuPosition.under,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      itemBuilder: (_) => [
-        PopupMenuItem<T>(enabled: false, height: 32, child: Text('$prefix by', style: context.tt.labelSmall)),
-        for (final v in values)
-          PopupMenuItem<T>(
-            value: v,
+    return Row(
+      children: [
+        Expanded(child: Text(title, style: context.tt.titleSmall)),
+        PopupMenuButton<T>(
+          tooltip: title,
+          initialValue: value,
+          onSelected: onSelected,
+          position: PopupMenuPosition.under,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          itemBuilder: (_) => [
+            for (final v in values)
+              PopupMenuItem<T>(
+                value: v,
+                child: Row(
+                  children: [
+                    Icon(iconOf(v), size: 18, color: v == value ? context.cs.primary : oc.muted),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(label(v))),
+                    if (v == value) Icon(Icons.check_rounded, size: 18, color: context.cs.primary),
+                  ],
+                ),
+              ),
+          ],
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.only(left: 10, right: 6),
+            decoration: BoxDecoration(
+              color: oc.surfaceHigh,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(iconOf(v), size: 18, color: v == value ? context.cs.primary : oc.muted),
-                const SizedBox(width: 12),
-                Expanded(child: Text(label(v))),
-                if (v == value) Icon(Icons.check_rounded, size: 18, color: context.cs.primary),
+                Icon(iconOf(value), size: 16, color: context.cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  label(value),
+                  style: TextStyle(color: oc.ink, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                Icon(Icons.expand_more_rounded, size: 18, color: oc.muted),
               ],
             ),
           ),
+        ),
       ],
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: oc.surface.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: oc.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: oc.muted),
-            const SizedBox(width: 8),
-            Text(
-              '$prefix: ',
-              style: TextStyle(color: oc.muted, fontWeight: FontWeight.w500, fontSize: 13.5),
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Text(
-                label(value),
-                key: ValueKey(value),
-                style: TextStyle(color: oc.ink, fontWeight: FontWeight.w600, fontSize: 13.5),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.expand_more_rounded, size: 18, color: oc.muted),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -487,7 +396,7 @@ class _LegendButton extends StatelessWidget {
     final oc = context.oc;
     final accent = Theme.of(context).colorScheme.primary;
     return Tooltip(
-      message: open ? 'Hide legend' : 'What do the colors mean?',
+      message: open ? 'Hide' : 'Colors, sizes and legend',
       child: Material(
         color: open ? accent.withValues(alpha: 0.12) : oc.surface.withValues(alpha: 0.94),
         shape: CircleBorder(side: BorderSide(color: open ? accent.withValues(alpha: 0.4) : oc.border)),
@@ -505,15 +414,16 @@ class _LegendButton extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.styler});
+  const _Legend({required this.styler, required this.app});
   final GraphStyler styler;
+  final AppState app;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
     final entries = styler.legend();
     return Container(
-      width: 270,
+      width: 280,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: oc.surface.withValues(alpha: 0.95),
@@ -525,7 +435,14 @@ class _Legend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Color: ${styler.colorBy.label}', style: context.tt.titleSmall),
+          _OptionRow<ColorBy>(
+            title: 'Color by',
+            value: app.colorBy,
+            values: ColorBy.values,
+            label: (v) => v.label,
+            iconOf: (v) => v.icon,
+            onSelected: app.setColorBy,
+          ),
           const SizedBox(height: 10),
           AnimatedSize(
             duration: const Duration(milliseconds: 250),
@@ -573,6 +490,15 @@ class _Legend extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 Divider(color: oc.border),
+                const SizedBox(height: 10),
+                _OptionRow<SizeBy>(
+                  title: 'Size by',
+                  value: app.sizeBy,
+                  values: SizeBy.values,
+                  label: (v) => v.label,
+                  iconOf: (v) => v.icon,
+                  onSelected: app.setSizeBy,
+                ),
                 const SizedBox(height: 8),
                 _LegendLine(icon: Icons.bubble_chart_outlined, text: styler.sizeCaption),
                 const _LegendLine(icon: Icons.linear_scale_rounded, text: 'Closer, thicker line = stronger tie'),
