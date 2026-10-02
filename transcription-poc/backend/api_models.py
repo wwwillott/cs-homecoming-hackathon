@@ -58,7 +58,7 @@ class OrganizationResponse(OrganizationInput):
 class PersonResponse(BaseModel):
     id: UUID
     name: str
-    alpha_score: Decimal | None
+    alpha_score: float | None
     how_met: str | None
     where_met: str | None
     met_at: datetime | None
@@ -195,6 +195,7 @@ class NetworkTreeResponse(BaseModel):
     is_primary: bool
     is_read_only: bool
     attributed_user_id: UUID | None
+    attributed_username: str | None = None
     source_snapshot_id: UUID | None
     created_at: datetime
 

@@ -1,13 +1,17 @@
 # cs-homecoming-hackathon
-BYU Homecoming Hackathon
+BYU Homecoming Hackathon — **Spruce** (`spruce.my`)
 
 ## Projects
 
-- [`frontend/`](frontend/): Orbit Flutter app for web and Android.
+- [`frontend/`](frontend/): Spruce Flutter app for web and Android.
 - [`transcription-poc/`](transcription-poc/): phone-side conversation transcription,
   PostgreSQL network data, Gemini summaries, and network search.
 
-## Run the integrated app
+## Production
+
+See [`DEPLOY.md`](DEPLOY.md) for Porkbun DNS, GitHub Pages (`spruce.my`), and Azure API (`api.spruce.my`).
+
+## Run the integrated app locally
 
 Start PostgreSQL and the API:
 

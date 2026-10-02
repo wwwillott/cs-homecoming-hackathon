@@ -67,12 +67,12 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const OrbitLogo(size: 48),
+                  const Center(child: OrbitLogo(size: 48)),
                   const SizedBox(height: 16),
-                  Text('Orbit', style: context.tt.headlineMedium, textAlign: TextAlign.center),
+                  Text('Spruce', style: context.tt.headlineMedium, textAlign: TextAlign.center),
                   const SizedBox(height: 6),
                   Text(
-                    _register ? 'Create an account to save your network.' : 'Sign in to your network.',
+                    _register ? 'Create an account to grow your tree.' : 'Sign in to your tree.',
                     style: context.tt.bodyMedium?.copyWith(color: context.oc.muted),
                     textAlign: TextAlign.center,
                   ),

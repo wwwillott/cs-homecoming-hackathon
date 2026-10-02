@@ -15,8 +15,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_BACKEND_DIR = Path(__file__).resolve().parent
+for candidate in (_REPO_ROOT, _BACKEND_DIR, Path("/app")):
+    if (candidate / "chatbot").is_dir():
+        if str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+        break
 
 from chatbot.orbit_agent import OrbitAgent, load_api_key  # noqa: E402
 from chatbot.prompts import SUGGESTED_PROMPTS  # noqa: E402

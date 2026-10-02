@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +13,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'contact_detail_screen.dart';
+import 'grow_screen.dart';
 
 class NetworkScreen extends StatefulWidget {
   const NetworkScreen({super.key});
@@ -21,7 +24,6 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   final _graph = GraphViewController();
-  final _sharedGraph = GraphViewController();
   bool _legendOpen = false;
   String? _lastFocus;
   bool _focusFromTap = false;
@@ -44,18 +46,16 @@ class _NetworkScreenState extends State<NetworkScreen> {
     final narrow = MediaQuery.sizeOf(context).width < Breakpoints.rail;
     final focus = app.byId(app.graphFocusId);
     final legendOpen = _legendOpen;
+    final myLabel = (app.username?.trim().isNotEmpty ?? false)
+        ? app.username!.trim()
+        : (app.userName.trim().isNotEmpty ? app.userName.trim() : 'You');
+    final theirLabel = app.activeSharedTree?.shortLabel ?? 'Them';
 
     if (app.graphFocusId != _lastFocus) {
       final id = app.graphFocusId;
       _lastFocus = id;
       if (id != null && !_focusFromTap) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (app.attachedContacts.any((c) => c.id == id)) {
-            _sharedGraph.centerOn(id);
-          } else {
-            _graph.centerOn(id);
-          }
-        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _graph.centerOn(id));
       }
       _focusFromTap = false;
     }
@@ -72,53 +72,33 @@ class _NetworkScreenState extends State<NetworkScreen> {
       );
     }
 
-    final styler = GraphStyler(contacts: contacts, colorBy: app.colorBy, sizeBy: app.sizeBy);
+    final styler = GraphStyler(
+      contacts: app.isSharedMode ? [...contacts, ...app.attachedContacts] : contacts,
+      colorBy: app.colorBy,
+      sizeBy: app.sizeBy,
+    );
 
     final graphStack = Stack(
       children: [
         Positioned.fill(
-          child: app.isSharedMode
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: GraphView(
-                        contacts: contacts,
-                        colorBy: app.colorBy,
-                        sizeBy: app.sizeBy,
-                        showPeerLinks: app.showPeerLinks,
-                        focusId: app.graphFocusId,
-                        onFocusChanged: (id) => _onFocus(app, id),
-                        controller: _graph,
-                        anchorLabel: 'You',
-                        fitPadding: EdgeInsets.fromLTRB(24, narrow ? 150 : 120, 16, narrow ? 190 : 60),
-                      ),
-                    ),
-                    VerticalDivider(width: 1, color: context.oc.border),
-                    Expanded(
-                      child: GraphView(
-                        contacts: app.attachedContacts,
-                        colorBy: app.colorBy,
-                        sizeBy: app.sizeBy,
-                        showPeerLinks: app.showPeerLinks,
-                        focusId: app.graphFocusId,
-                        onFocusChanged: (id) => _onFocus(app, id),
-                        controller: _sharedGraph,
-                        anchorLabel: app.activeSharedTree?.shortLabel ?? 'Them',
-                        fitPadding: EdgeInsets.fromLTRB(16, narrow ? 150 : 120, 24, narrow ? 190 : 60),
-                      ),
-                    ),
-                  ],
-                )
-              : GraphView(
-                  contacts: contacts,
-                  colorBy: app.colorBy,
-                  sizeBy: app.sizeBy,
-                  showPeerLinks: app.showPeerLinks,
-                  focusId: app.graphFocusId,
-                  onFocusChanged: (id) => _onFocus(app, id),
-                  controller: _graph,
-                  fitPadding: EdgeInsets.fromLTRB(32, narrow ? 84 : 96, 32, narrow ? 190 : 60),
-                ),
+          child: GraphView(
+            contacts: contacts,
+            attachedContacts: app.isSharedMode ? app.attachedContacts : const [],
+            colorBy: app.colorBy,
+            sizeBy: app.sizeBy,
+            showPeerLinks: app.showPeerLinks,
+            focusId: app.graphFocusId,
+            onFocusChanged: (id) => _onFocus(app, id),
+            controller: _graph,
+            anchorLabel: myLabel,
+            attachedAnchorLabel: theirLabel,
+            fitPadding: EdgeInsets.fromLTRB(
+              32,
+              narrow ? (app.isSharedMode ? 150 : 120) : 96,
+              narrow ? 32 : 190,
+              narrow ? 220 : 60,
+            ),
+          ),
         ),
         Positioned(
           top: 0,
@@ -134,6 +114,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   _TopBar(
                     compact: narrow,
                     contacts: contacts,
+                    links: styler.edges.length,
                     onSearch: () => _openSearch(context, app),
                     onFit: _fitAll,
                     onShare: () => _openShare(context, app),
@@ -142,7 +123,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   ),
                   if (app.isSharedMode) ...[
                     const SizedBox(height: 8),
-                    _SharedModeBanner(label: app.activeSharedTree?.label ?? 'Shared network'),
+                    _SharedModeBanner(label: '$myLabel ↔ $theirLabel'),
                   ],
                 ],
               ),
@@ -185,7 +166,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         ? Padding(
                             key: const ValueKey('legend'),
                             padding: const EdgeInsets.only(bottom: 8),
-                            child: _Legend(styler: styler, app: app),
+                            child: _Legend(styler: styler),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -224,36 +205,80 @@ class _NetworkScreenState extends State<NetworkScreen> {
       ],
     );
 
-    if (!wide) return graphStack;
+    if (!wide) return _withAssistant(context, app, graphStack);
 
-    return Row(
-      children: [
-        Expanded(child: graphStack),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeOutCubic,
-          width: focus == null ? 0 : 440,
-          decoration: BoxDecoration(
-            color: context.oc.background,
-            border: Border(left: BorderSide(color: context.oc.border)),
-          ),
-          child: ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: 440,
-              maxWidth: 440,
-              child: focus == null
-                  ? const SizedBox.shrink()
-                  : SafeArea(
-                      left: false,
-                      child: ContactDetailView(
-                        key: ValueKey(focus.id),
-                        contactId: focus.id,
-                        embedded: true,
-                        onClose: () => _onFocus(app, null),
-                        onOpenContact: (id) => _focusAndCenter(app, id),
+    return _withAssistant(
+      context,
+      app,
+      Row(
+        children: [
+          Expanded(child: graphStack),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            width: focus == null ? 0 : 440,
+            decoration: BoxDecoration(
+              color: context.oc.background,
+              border: Border(left: BorderSide(color: context.oc.border)),
+            ),
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.centerLeft,
+                minWidth: 440,
+                maxWidth: 440,
+                child: focus == null
+                    ? const SizedBox.shrink()
+                    : SafeArea(
+                        left: false,
+                        child: ContactDetailView(
+                          key: ValueKey(focus.id),
+                          contactId: focus.id,
+                          embedded: true,
+                          onClose: () => _onFocus(app, null),
+                          onOpenContact: (id) => _focusAndCenter(app, id),
+                        ),
                       ),
-                    ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _withAssistant(BuildContext context, AppState app, Widget child) {
+    final open = app.assistantOpen;
+    final size = MediaQuery.sizeOf(context);
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !open,
+            child: AnimatedOpacity(
+              opacity: open ? 1 : 0,
+              duration: const Duration(milliseconds: 250),
+              child: GestureDetector(
+                onTap: () => app.setAssistantOpen(false),
+                child: ColoredBox(color: Colors.black.withValues(alpha: context.isDark ? 0.45 : 0.25)),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPad > 0 ? 8 : 16),
+              child: AssistantDock(
+                maxWidth: size.width,
+                panelHeight: math.min(560.0, size.height - (bottomPad + 80)),
+                collapsedStyle: AssistantCollapsedStyle.fab,
+              ),
             ),
           ),
         ),
@@ -274,7 +299,6 @@ class _NetworkScreenState extends State<NetworkScreen> {
 
   void _fitAll() {
     _graph.fitToView();
-    _sharedGraph.fitToView();
   }
 
   Future<void> _openShare(BuildContext context, AppState app) async {
@@ -302,6 +326,7 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.compact,
     required this.contacts,
+    required this.links,
     required this.onSearch,
     required this.onFit,
     required this.onShare,
@@ -311,6 +336,7 @@ class _TopBar extends StatelessWidget {
 
   final bool compact;
   final List<Contact> contacts;
+  final int links;
   final VoidCallback onSearch;
   final VoidCallback onFit;
   final VoidCallback onShare;
@@ -319,12 +345,43 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = contacts.length;
+    final app = AppScope.of(context);
+    final name = (app.username?.trim().isNotEmpty ?? false)
+        ? app.username!.trim()
+        : (app.userName.trim().isNotEmpty ? app.userName.trim() : '');
+    final title = name.isEmpty ? 'Your tree' : "$name's tree";
+
     final controls = [
+      _OptionMenu<ColorBy>(
+        prefix: 'Color',
+        icon: Icons.palette_outlined,
+        value: app.colorBy,
+        values: ColorBy.values,
+        label: (v) => v.label,
+        iconOf: (v) => v.icon,
+        onSelected: app.setColorBy,
+        compact: compact,
+      ),
+      _OptionMenu<SizeBy>(
+        prefix: 'Size',
+        icon: Icons.bubble_chart_outlined,
+        value: app.sizeBy,
+        values: SizeBy.values,
+        label: (v) => v.label,
+        iconOf: (v) => v.icon,
+        onSelected: app.setSizeBy,
+        compact: compact,
+      ),
+      _GlassButton(
+        tooltip: app.showPeerLinks ? 'Hide who-knows-who links' : 'Show who-knows-who links',
+        active: app.showPeerLinks,
+        onTap: () => app.setShowPeerLinks(!app.showPeerLinks),
+        child: const Icon(Icons.hub_outlined, size: 18),
+      ),
       _GlassButton(tooltip: 'Share tree', onTap: onShare, child: const Icon(Icons.qr_code_2_rounded, size: 19)),
       _GlassButton(tooltip: 'Join a tree', onTap: onJoin, child: const Icon(Icons.login_rounded, size: 18)),
       if (onLeave != null)
-        _GlassButton(tooltip: 'Leave shared mode', onTap: onLeave!, child: const Icon(Icons.link_off_rounded, size: 18)),
+        _GlassButton(tooltip: 'Leave shared mode', active: true, onTap: onLeave!, child: const Icon(Icons.link_off_rounded, size: 18)),
       _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
       if (compact)
         _GlassButton(
@@ -333,39 +390,70 @@ class _TopBar extends StatelessWidget {
           child: const Icon(Icons.center_focus_strong_outlined, size: 19),
         ),
     ];
-    return Row(
+
+    final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Your Tree', style: context.tt.headlineSmall),
-              const SizedBox(height: 2),
-              Text(count == 1 ? '1 person' : '$count people', style: context.tt.bodySmall),
-            ],
+        Text(title, style: context.tt.headlineSmall),
+        const SizedBox(height: 2),
+        Text('${contacts.length} people · $links mutual links', style: context.tt.bodySmall),
+      ],
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          titleBlock,
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < controls.length; i++) ...[if (i > 0) const SizedBox(width: 8), controls[i]],
+              ],
+            ),
           ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: titleBlock),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: controls),
+            ),
+          ],
         ),
-        for (var i = 0; i < controls.length; i++) ...[if (i > 0) const SizedBox(width: 8), controls[i]],
       ],
     );
   }
 }
 
 class _GlassButton extends StatelessWidget {
-  const _GlassButton({required this.child, required this.onTap, this.tooltip});
+  const _GlassButton({required this.child, required this.onTap, this.tooltip, this.active = false});
   final Widget child;
   final VoidCallback onTap;
   final String? tooltip;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
+    final primary = context.cs.primary;
     final button = Material(
-      color: context.oc.surface.withValues(alpha: 0.92),
+      color: active
+          ? primary.withValues(alpha: context.isDark ? 0.25 : 0.12)
+          : context.oc.surface.withValues(alpha: 0.92),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: context.oc.border),
+        side: BorderSide(color: active ? primary.withValues(alpha: 0.4) : context.oc.border),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -374,7 +462,7 @@ class _GlassButton extends StatelessWidget {
           height: 40,
           width: 40,
           child: IconTheme(
-            data: IconThemeData(color: context.oc.ink),
+            data: IconThemeData(color: active ? primary : context.oc.ink),
             child: Center(child: child),
           ),
         ),
@@ -384,71 +472,81 @@ class _GlassButton extends StatelessWidget {
   }
 }
 
-class _OptionRow<T> extends StatelessWidget {
-  const _OptionRow({
-    required this.title,
+class _OptionMenu<T> extends StatelessWidget {
+  const _OptionMenu({
+    required this.prefix,
+    required this.icon,
     required this.value,
     required this.values,
     required this.label,
     required this.iconOf,
     required this.onSelected,
+    required this.compact,
   });
 
-  final String title;
+  final String prefix;
+  final IconData icon;
   final T value;
   final List<T> values;
   final String Function(T) label;
   final IconData Function(T) iconOf;
   final ValueChanged<T> onSelected;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
-    return Row(
-      children: [
-        Expanded(child: Text(title, style: context.tt.titleSmall)),
-        PopupMenuButton<T>(
-          tooltip: title,
-          initialValue: value,
-          onSelected: onSelected,
-          position: PopupMenuPosition.under,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          itemBuilder: (_) => [
-            for (final v in values)
-              PopupMenuItem<T>(
-                value: v,
-                child: Row(
-                  children: [
-                    Icon(iconOf(v), size: 18, color: v == value ? context.cs.primary : oc.muted),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(label(v))),
-                    if (v == value) Icon(Icons.check_rounded, size: 18, color: context.cs.primary),
-                  ],
-                ),
-              ),
-          ],
-          child: Container(
-            height: 34,
-            padding: const EdgeInsets.only(left: 10, right: 6),
-            decoration: BoxDecoration(
-              color: oc.surfaceHigh,
-              borderRadius: BorderRadius.circular(10),
-            ),
+    return PopupMenuButton<T>(
+      tooltip: '$prefix by',
+      initialValue: value,
+      onSelected: onSelected,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      itemBuilder: (_) => [
+        PopupMenuItem<T>(enabled: false, height: 32, child: Text('$prefix by', style: context.tt.labelSmall)),
+        for (final v in values)
+          PopupMenuItem<T>(
+            value: v,
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(iconOf(value), size: 16, color: context.cs.primary),
-                const SizedBox(width: 6),
-                Text(
-                  label(value),
-                  style: TextStyle(color: oc.ink, fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                Icon(Icons.expand_more_rounded, size: 18, color: oc.muted),
+                Icon(iconOf(v), size: 18, color: v == value ? context.cs.primary : oc.muted),
+                const SizedBox(width: 12),
+                Expanded(child: Text(label(v))),
+                if (v == value) Icon(Icons.check_rounded, size: 18, color: context.cs.primary),
               ],
             ),
           ),
-        ),
       ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: oc.surface.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: oc.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: oc.muted),
+            const SizedBox(width: 8),
+            Text(
+              '$prefix: ',
+              style: TextStyle(color: oc.muted, fontWeight: FontWeight.w500, fontSize: 13.5),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                label(value),
+                key: ValueKey(value),
+                style: TextStyle(color: oc.ink, fontWeight: FontWeight.w600, fontSize: 13.5),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more_rounded, size: 18, color: oc.muted),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -489,7 +587,7 @@ class _LegendButton extends StatelessWidget {
     final oc = context.oc;
     final accent = Theme.of(context).colorScheme.primary;
     return Tooltip(
-      message: open ? 'Hide' : 'Colors, sizes and legend',
+      message: open ? 'Hide legend' : 'What do the colors mean?',
       child: Material(
         color: open ? accent.withValues(alpha: 0.12) : oc.surface.withValues(alpha: 0.94),
         shape: CircleBorder(side: BorderSide(color: open ? accent.withValues(alpha: 0.4) : oc.border)),
@@ -507,16 +605,15 @@ class _LegendButton extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.styler, required this.app});
+  const _Legend({required this.styler});
   final GraphStyler styler;
-  final AppState app;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
     final entries = styler.legend();
     return Container(
-      width: 280,
+      width: 270,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: oc.surface.withValues(alpha: 0.95),
@@ -528,14 +625,7 @@ class _Legend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _OptionRow<ColorBy>(
-            title: 'Color by',
-            value: app.colorBy,
-            values: ColorBy.values,
-            label: (v) => v.label,
-            iconOf: (v) => v.icon,
-            onSelected: app.setColorBy,
-          ),
+          Text('Color: ${styler.colorBy.label}', style: context.tt.titleSmall),
           const SizedBox(height: 10),
           AnimatedSize(
             duration: const Duration(milliseconds: 250),
@@ -583,15 +673,6 @@ class _Legend extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 Divider(color: oc.border),
-                const SizedBox(height: 10),
-                _OptionRow<SizeBy>(
-                  title: 'Size by',
-                  value: app.sizeBy,
-                  values: SizeBy.values,
-                  label: (v) => v.label,
-                  iconOf: (v) => v.icon,
-                  onSelected: app.setSizeBy,
-                ),
                 const SizedBox(height: 8),
                 _LegendLine(icon: Icons.bubble_chart_outlined, text: styler.sizeCaption),
                 const _LegendLine(icon: Icons.linear_scale_rounded, text: 'Closer, thicker line = stronger tie'),
@@ -825,8 +906,10 @@ class _SharedModeBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Shared mode · browsing $label (read-only)',
+              'Shared mode · $label',
               style: context.tt.bodySmall?.copyWith(color: oc.ink, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

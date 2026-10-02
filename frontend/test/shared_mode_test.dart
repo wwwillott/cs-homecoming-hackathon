@@ -6,6 +6,7 @@ import 'package:orbit/models/contact.dart';
 import 'package:orbit/models/network_tree.dart';
 import 'package:orbit/models/user_mode.dart';
 import 'package:orbit/services/assistant_service.dart';
+import 'package:orbit/services/network_tree_service.dart';
 import 'package:orbit/services/recap_service.dart';
 import 'package:orbit/state/app_state.dart';
 import 'package:orbit/theme/app_theme.dart';
@@ -26,6 +27,24 @@ AppState _testApp() {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('contactFromPerson accepts decimal alpha_score strings', () {
+    final contact = NetworkTreeService.contactFromPerson(
+      {
+        'id': 'p1',
+        'name': 'Maya',
+        'alpha_score': '9.00',
+        'organizations': const [],
+        'contact_methods': const [],
+        'notes': const [],
+        'interests': const ['Robotics'],
+      },
+      const [],
+      readOnly: true,
+    );
+    expect(contact.strength, 9);
+    expect(contact.readOnly, isTrue);
+  });
+
   test('askTreeIds includes primary and attached trees in shared mode', () {
     final app = _testApp();
     app.attachSharedTreeForTest(
@@ -34,6 +53,7 @@ void main() {
         label: "Maya's network",
         isPrimary: false,
         isReadOnly: true,
+        attributedUsername: 'maya',
       ),
       contacts: [
         Contact(id: 'p1', name: 'Priya'),
@@ -42,6 +62,7 @@ void main() {
 
     expect(app.isSharedMode, isTrue);
     expect(app.attachedContacts, hasLength(1));
+    expect(app.activeSharedTree!.shortLabel, 'maya');
     expect(app.askTreeIds(), containsAll(['primary', 'attached-1']));
 
     app.leaveSharedMode();
@@ -50,20 +71,21 @@ void main() {
     expect(app.askTreeIds(), equals(['primary']));
   });
 
-  testWidgets('shared mode renders two graph clouds with distinct anchors', (tester) async {
+  testWidgets('shared mode uses one stage with two username anchors', (tester) async {
     final app = _testApp();
+    app.username = 'will';
     app.attachSharedTreeForTest(
       tree: const NetworkTree(
         id: 'attached-1',
         label: "Maya's network",
         isPrimary: false,
         isReadOnly: true,
+        attributedUsername: 'maya',
       ),
       contacts: [
         Contact(id: 'maya-contact', name: 'Leo Chen', company: 'Robotics Lab', readOnly: true),
       ],
     );
-    // Seed the primary cloud.
     app.loadDemoData();
 
     await tester.pumpWidget(
@@ -72,39 +94,16 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.light(),
           home: Scaffold(
-            body: Column(
-              children: [
-                if (app.isSharedMode)
-                  Text('Shared with ${app.activeSharedTree!.shortLabel}'),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GraphView(
-                          contacts: app.contacts,
-                          colorBy: ColorBy.strength,
-                          sizeBy: SizeBy.strength,
-                          showPeerLinks: true,
-                          focusId: null,
-                          onFocusChanged: (_) {},
-                          anchorLabel: 'You',
-                        ),
-                      ),
-                      Expanded(
-                        child: GraphView(
-                          contacts: app.attachedContacts,
-                          colorBy: ColorBy.strength,
-                          sizeBy: SizeBy.strength,
-                          showPeerLinks: true,
-                          focusId: null,
-                          onFocusChanged: (_) {},
-                          anchorLabel: app.activeSharedTree?.shortLabel ?? 'Them',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            body: GraphView(
+              contacts: app.contacts,
+              attachedContacts: app.attachedContacts,
+              colorBy: ColorBy.strength,
+              sizeBy: SizeBy.strength,
+              showPeerLinks: true,
+              focusId: null,
+              onFocusChanged: (_) {},
+              anchorLabel: app.username ?? 'You',
+              attachedAnchorLabel: app.activeSharedTree!.shortLabel,
             ),
           ),
         ),
@@ -112,10 +111,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Shared with Maya'), findsOneWidget);
-    expect(find.byType(GraphView), findsNWidgets(2));
-    final views = tester.widgetList<GraphView>(find.byType(GraphView)).toList();
-    expect(views.map((view) => view.anchorLabel), containsAll(['You', 'Maya']));
-    expect(views.last.contacts.any((c) => c.readOnly), isTrue);
+    expect(find.byType(GraphView), findsOneWidget);
+    final view = tester.widget<GraphView>(find.byType(GraphView));
+    expect(view.anchorLabel, 'will');
+    expect(view.attachedAnchorLabel, 'maya');
+    expect(view.attachedContacts, isNotEmpty);
   });
 }

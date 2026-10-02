@@ -277,43 +277,70 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 }
 
-/// Small brand mark: three orbiting dots.
+/// Small brand mark: a simple spruce tree.
 class OrbitLogo extends StatelessWidget {
   const OrbitLogo({super.key, this.size = 32});
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.3),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: AppColors.brand,
+    // SizedBox alone still expands under CrossAxisAlignment.stretch; Align
+    // with factors keeps the mark square regardless of parent constraints.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(size * 0.3),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: AppColors.brand,
+            ),
+          ),
+          child: CustomPaint(painter: _TreeLogoPainter()),
         ),
       ),
-      child: CustomPaint(painter: _LogoPainter()),
     );
   }
 }
 
-class _LogoPainter extends CustomPainter {
+class _TreeLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width * 0.27;
-    canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = size.width * 0.06
-          ..color = AppColors.mistCream.withValues(alpha: 0.55));
-    canvas.drawCircle(c, size.width * 0.1, Paint()..color = AppColors.mistCream);
-    canvas.drawCircle(c + Offset(r * 0.71, -r * 0.71), size.width * 0.07, Paint()..color = AppColors.freshLeaf);
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..color = AppColors.mistCream
+      ..style = PaintingStyle.fill;
+
+    // Trunk
+    final trunk = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.78),
+        width: w * 0.12,
+        height: h * 0.22,
+      ),
+      Radius.circular(w * 0.04),
+    );
+    canvas.drawRRect(trunk, paint);
+
+    // Three stacked triangles for foliage
+    void canopy(double top, double bottom, double halfWidth) {
+      final path = Path()
+        ..moveTo(w * 0.5, h * top)
+        ..lineTo(w * 0.5 + w * halfWidth, h * bottom)
+        ..lineTo(w * 0.5 - w * halfWidth, h * bottom)
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+
+    canopy(0.12, 0.42, 0.28);
+    canopy(0.28, 0.58, 0.34);
+    canopy(0.44, 0.74, 0.38);
   }
 
   @override

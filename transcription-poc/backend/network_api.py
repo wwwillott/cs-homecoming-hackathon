@@ -91,15 +91,34 @@ async def current_user_id(
 CurrentUser = Annotated[UUID, Depends(current_user_id)]
 
 
-def tree_response(tree: NetworkTree) -> NetworkTreeResponse:
+def tree_response(tree: NetworkTree, *, attributed_username: str | None = None) -> NetworkTreeResponse:
     return NetworkTreeResponse(
         id=tree.id,
         label=tree.label,
         is_primary=tree.is_primary,
         is_read_only=tree.is_read_only,
         attributed_user_id=tree.attributed_user_id,
+        attributed_username=attributed_username,
         source_snapshot_id=tree.source_snapshot_id,
         created_at=tree.created_at,
+    )
+
+
+async def attributed_username_for(
+    session: AsyncSession, tree: NetworkTree
+) -> str | None:
+    if tree.attributed_user_id is None:
+        return None
+    user = await session.get(User, tree.attributed_user_id)
+    return user.username if user is not None else None
+
+
+async def tree_response_async(
+    session: AsyncSession, tree: NetworkTree
+) -> NetworkTreeResponse:
+    return tree_response(
+        tree,
+        attributed_username=await attributed_username_for(session, tree),
     )
 
 
@@ -169,7 +188,7 @@ async def person_response(session: AsyncSession, person: Person) -> PersonRespon
     return PersonResponse(
         id=person.id,
         name=person.name,
-        alpha_score=person.alpha_score,
+        alpha_score=float(person.alpha_score) if person.alpha_score is not None else None,
         how_met=person.how_met,
         where_met=person.where_met,
         met_at=person.met_at,
@@ -985,7 +1004,7 @@ async def list_network_trees(session: Session, user_id: CurrentUser) -> list[Net
             .order_by(NetworkTree.is_primary.desc(), NetworkTree.created_at)
         )
     ).all()
-    return [tree_response(tree) for tree in trees]
+    return [await tree_response_async(session, tree) for tree in trees]
 
 
 @router.post(
@@ -1044,7 +1063,7 @@ async def import_network_tree(
     tree = await import_snapshot(session, user_id, snapshot, provider)
     await session.commit()
     await session.refresh(tree)
-    return tree_response(tree)
+    return await tree_response_async(session, tree)
 
 
 async def resolve_tree_ids(

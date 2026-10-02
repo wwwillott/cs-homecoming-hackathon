@@ -205,7 +205,7 @@ class NetworkTreeService {
           .firstWhere((value) => value.isNotEmpty, orElse: () => ''),
       location: person['where_met'] as String? ?? '',
       metAt: person['how_met'] as String? ?? person['where_met'] as String? ?? '',
-      strength: ((person['alpha_score'] as num?)?.round() ?? 5).clamp(1, 10),
+      strength: _strengthFrom(person['alpha_score']),
       tags: [
         for (final item in person['interests'] as List? ?? const []) item.toString(),
       ],
@@ -214,6 +214,16 @@ class NetworkTreeService {
       readOnly: readOnly,
       createdAt: DateTime.tryParse(person['created_at'] as String? ?? ''),
     );
+  }
+
+  static int _strengthFrom(Object? value) {
+    num? parsed;
+    if (value is num) {
+      parsed = value;
+    } else if (value is String) {
+      parsed = num.tryParse(value);
+    }
+    return (parsed?.round() ?? 5).clamp(1, 10);
   }
 
   Object? _decode(http.Response response) {
