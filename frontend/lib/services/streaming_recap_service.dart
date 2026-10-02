@@ -120,7 +120,8 @@ class ApiRecapService implements RecapService {
     if (!_active) return;
     _socketReady = false;
     _ready = Completer<void>();
-    final channel = WebSocketChannel.connect(_webSocketUri);
+    final uri = _webSocketUri;
+    final channel = WebSocketChannel.connect(uri);
     _channel = channel;
     _socketSubscription = channel.stream.listen(
       (message) => _handleSocketMessage(channel, message),
@@ -128,14 +129,24 @@ class ApiRecapService implements RecapService {
       onDone: () => _handleSocketClosed(channel),
       cancelOnError: true,
     );
-    await channel.ready;
+    try {
+      await channel.ready.timeout(const Duration(seconds: 45));
+    } on Object catch (error) {
+      await _socketSubscription?.cancel();
+      _socketSubscription = null;
+      _channel = null;
+      throw StateError(
+        'Could not reach the transcription API at ${uri.host}. '
+        'Check that the API is awake, then try again. ($error)',
+      );
+    }
     channel.sink.add(
       jsonEncode({
         'type': 'start',
         if (_sessionId != null) 'session_id': _sessionId,
       }),
     );
-    await _ready!.future.timeout(const Duration(seconds: 10));
+    await _ready!.future.timeout(const Duration(seconds: 15));
   }
 
   void _handleSocketMessage(WebSocketChannel source, dynamic message) {
