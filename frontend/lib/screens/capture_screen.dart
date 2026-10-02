@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -33,16 +32,20 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
   final _transcriptScroll = ScrollController();
   final _rnd = math.Random();
   final List<Timer> _timers = [];
+  StreamSubscription<RecapProgress>? _progressSubscription;
+  RecapService? _recapService;
 
   Duration _elapsed = Duration.zero;
-  int _wordsShown = 0;
   int _processingStep = 0;
   String? _error;
+  String _transcript = '';
+  String _interim = '';
+  String? _connectionMessage;
+  bool _hasGap = false;
 
-  static final _words = MockRecapService.demoTranscript.split(' ');
   static const _steps = [
-    'Uploading audio',
-    'Transcribing',
+    'Finalizing transcript',
+    'Saving conversation',
     'Finding people, companies, and details',
     'Drafting a profile',
   ];
@@ -56,50 +59,72 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     _pulse.dispose();
     _levels.dispose();
     _transcriptScroll.dispose();
+    _progressSubscription?.cancel();
+    if (_phase == _Phase.recording) unawaited(_recapService?.cancel());
     super.dispose();
   }
 
-  void _start() {
+  Future<void> _start() async {
     if (!mounted || _phase == _Phase.recording) return;
     setState(() {
       _phase = _Phase.recording;
       _elapsed = Duration.zero;
-      _wordsShown = 0;
       _error = null;
+      _transcript = '';
+      _interim = '';
+      _connectionMessage = 'Connecting…';
+      _hasGap = false;
     });
-    _pulse.repeat();
-    if (_ticker.isActive) _ticker.stop();
-    _ticker.start();
+    final service = AppScope.read(context).recapService;
+    _recapService = service;
+    await _progressSubscription?.cancel();
+    _progressSubscription = service.progress.listen(_onProgress);
+    try {
+      await service.start(kind: _kind);
+      _pulse.repeat();
+      if (_ticker.isActive) _ticker.stop();
+      _ticker.start();
+    } catch (error) {
+      await service.cancel();
+      if (!mounted) return;
+      setState(() {
+        _phase = _Phase.error;
+        _error = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
   }
 
   void _onTick(Duration elapsed) {
     final secs = elapsed.inMilliseconds / 1000;
 
-    const wordsPerSec = 3.2;
-    final words = math.min(_words.length, (secs * wordsPerSec).floor());
-    final talking = words < _words.length;
-
     final prev = _levels.value;
     final next = List<double>.generate(prev.length, (i) {
       if (i < prev.length - 1) return prev[i + 1];
-      if (!talking) return 0.05 + _rnd.nextDouble() * 0.05;
       final base = 0.35 + 0.3 * math.sin(secs * 7.3) * math.sin(secs * 2.1 + 1);
       return (base + _rnd.nextDouble() * 0.45).clamp(0.08, 1.0);
     });
     _levels.value = next;
 
-    if (elapsed.inSeconds != _elapsed.inSeconds || words != _wordsShown) {
+    if (elapsed.inSeconds != _elapsed.inSeconds) {
       setState(() {
         _elapsed = elapsed;
-        _wordsShown = words;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_transcriptScroll.hasClients) {
-          _transcriptScroll.jumpTo(_transcriptScroll.position.maxScrollExtent);
-        }
       });
     }
+  }
 
+  void _onProgress(RecapProgress progress) {
+    if (!mounted) return;
+    setState(() {
+      _transcript = progress.committedTranscript;
+      _interim = progress.interimTranscript;
+      if (progress.message != null) _connectionMessage = progress.message;
+      _hasGap = _hasGap || progress.hasGap;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_transcriptScroll.hasClients) {
+        _transcriptScroll.jumpTo(_transcriptScroll.position.maxScrollExtent);
+      }
+    });
   }
 
   Future<void> _stop() async {
@@ -112,23 +137,22 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     });
     for (var i = 1; i < _steps.length; i++) {
       _timers.add(Timer(Duration(milliseconds: 650 * i), () {
-        if (mounted && _phase == _Phase.processing) setState(() => _processingStep = i);
+        if (mounted && _phase == _Phase.processing) {
+          setState(() => _processingStep = i);
+        }
       }));
     }
+    final app = AppScope.read(context);
     try {
-      final app = AppScope.read(context);
       final nav = Navigator.of(context);
-      final draft = await app.recapService.summarize(
-        audio: Uint8List(0),
-        mimeType: 'audio/webm',
-        kind: _kind,
-      );
+      final draft = await app.recapService.stopAndSummarize();
       if (!mounted) return;
       setState(() => _processingStep = _steps.length);
       await Future<void>.delayed(const Duration(milliseconds: 450));
       if (!mounted) return;
       nav.pushReplacement(draftRoute(draft));
     } catch (e) {
+      await app.recapService.cancel();
       if (!mounted) return;
       setState(() {
         _phase = _Phase.error;
@@ -220,16 +244,20 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
                                     levels: _levels,
                                     pulse: _pulse,
                                     error: _error,
-                                    onTap: _phase == _Phase.recording ? _stop : _start,
+                                    status: _phase == _Phase.recording ? _connectionMessage : null,
+                                    onTap: _phase == _Phase.recording ? _stop : () => _start(),
                                   ),
                           ),
                         ),
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeOutCubic,
-                          child: _phase == _Phase.recording && _wordsShown > 0
+                          child: _phase == _Phase.recording &&
+                                  (_transcript.isNotEmpty || _interim.isNotEmpty)
                               ? _TranscriptPreview(
-                                  text: _words.take(_wordsShown).join(' '),
+                                  text: _transcript,
+                                  interim: _interim,
+                                  hasGap: _hasGap,
                                   controller: _transcriptScroll,
                                 )
                               : _phase == _Phase.idle
@@ -258,6 +286,7 @@ class _RecorderBody extends StatelessWidget {
     required this.pulse,
     required this.onTap,
     this.error,
+    this.status,
   });
 
   final _Phase phase;
@@ -266,6 +295,7 @@ class _RecorderBody extends StatelessWidget {
   final Animation<double> pulse;
   final VoidCallback onTap;
   final String? error;
+  final String? status;
 
   @override
   Widget build(BuildContext context) {
@@ -298,8 +328,8 @@ class _RecorderBody extends StatelessWidget {
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: Text(
-            error ?? (recording ? 'Tap to finish' : 'Tap to start recording'),
-            key: ValueKey('${error != null}$recording'),
+            error ?? status ?? (recording ? 'Tap to finish' : 'Tap to start recording'),
+            key: ValueKey('${error != null}$status$recording'),
             textAlign: TextAlign.center,
             style: context.tt.bodyMedium?.copyWith(
               color: error != null ? AppColors.rose : Colors.white.withValues(alpha: 0.7),
@@ -437,8 +467,15 @@ class _WavePainter extends CustomPainter {
 }
 
 class _TranscriptPreview extends StatelessWidget {
-  const _TranscriptPreview({required this.text, required this.controller});
+  const _TranscriptPreview({
+    required this.text,
+    required this.interim,
+    required this.hasGap,
+    required this.controller,
+  });
   final String text;
+  final String interim;
+  final bool hasGap;
   final ScrollController controller;
 
   @override
@@ -465,6 +502,12 @@ class _TranscriptPreview extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text('Live preview', style: context.tt.labelSmall?.copyWith(color: Colors.white70)),
+              if (hasGap) ...[
+                const Spacer(),
+                const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.amber),
+                const SizedBox(width: 4),
+                Text('Audio gap', style: context.tt.labelSmall?.copyWith(color: AppColors.amber)),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -472,7 +515,7 @@ class _TranscriptPreview extends StatelessWidget {
             child: SingleChildScrollView(
               controller: controller,
               child: Text(
-                text,
+                [text, if (interim.isNotEmpty) interim].where((value) => value.isNotEmpty).join(' '),
                 style: context.tt.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.88)),
               ),
             ),
