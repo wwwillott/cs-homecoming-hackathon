@@ -277,45 +277,22 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 }
 
-/// Small brand mark: three orbiting dots.
+/// Small brand mark: the Spruce tree from the app icon.
 class OrbitLogo extends StatelessWidget {
   const OrbitLogo({super.key, this.size = 32});
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.3),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: AppColors.brand,
-        ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.3),
+      child: Image.asset(
+        'assets/images/spruce_mark.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
       ),
-      child: CustomPaint(painter: _LogoPainter()),
     );
   }
-}
-
-class _LogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width * 0.27;
-    canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = size.width * 0.06
-          ..color = AppColors.mistCream.withValues(alpha: 0.55));
-    canvas.drawCircle(c, size.width * 0.1, Paint()..color = AppColors.mistCream);
-    canvas.drawCircle(c + Offset(r * 0.71, -r * 0.71), size.width * 0.07, Paint()..color = AppColors.freshLeaf);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

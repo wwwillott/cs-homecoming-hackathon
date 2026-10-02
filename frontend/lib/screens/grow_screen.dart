@@ -11,6 +11,7 @@ import '../navigation.dart';
 import '../services/assistant_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/chat_markdown.dart';
 import '../widgets/common.dart';
 import 'settings_sheet.dart';
 
@@ -107,11 +108,7 @@ class _GrowScreenState extends State<GrowScreen> {
                                     ),
                                     backgroundColor: AppColors.ai.withValues(alpha: context.isDark ? 0.18 : 0.1),
                                     side: BorderSide(color: AppColors.ai.withValues(alpha: 0.45)),
-                                    onPressed: () => _dock.currentState?.ask(
-                                      recruiter
-                                          ? 'Which apps should I use to find great candidates?'
-                                          : 'Which apps should I use to grow my network?',
-                                    ),
+                                    onPressed: () => _dock.currentState?.suggestApps(),
                                   ),
                                 ],
                               ),
@@ -433,6 +430,49 @@ class _AssistantDockState extends State<AssistantDock> {
   void ask(String prompt) {
     AppScope.read(context).setAssistantOpen(true);
     _send(prompt);
+  }
+
+  /// Local app picks from the size of the user's own tree. Does not call the API.
+  void suggestApps() {
+    if (_sending) return;
+    final app = AppScope.read(context);
+    final answer = spruceAppSuggestion(
+      people: app.contacts.length,
+      recruiter: app.mode == UserMode.recruiter,
+    );
+    app.setAssistantOpen(true);
+    setState(() {
+      _messages.add(ChatMessage(
+        role: ChatRole.user,
+        text: 'Which apps should I use?',
+        sentAt: DateTime.now(),
+      ));
+      _sending = true;
+      _streaming = '';
+    });
+    final generation = _generation;
+    final words = answer.split(' ');
+    _sub = _typed(words).listen(
+      (chunk) {
+        if (!mounted || generation != _generation) return;
+        setState(() => _streaming += chunk);
+      },
+      onDone: () {
+        if (!mounted || generation != _generation) return;
+        _finish(_streaming);
+      },
+      onError: (_) {
+        if (!mounted || generation != _generation) return;
+        _finish(answer);
+      },
+    );
+  }
+
+  Stream<String> _typed(List<String> words) async* {
+    for (var i = 0; i < words.length; i++) {
+      yield i == 0 ? words[i] : ' ${words[i]}';
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
   }
 
   void _newChat() {
@@ -861,10 +901,15 @@ class _Bubble extends StatelessWidget {
       ),
       child: typing
           ? const _TypingDots()
-          : SelectableText(
-              message.text,
-              style: context.tt.bodyMedium?.copyWith(color: mine ? context.cs.onPrimary : oc.ink, height: 1.45),
-            ),
+          : mine
+              ? SelectableText(
+                  message.text,
+                  style: context.tt.bodyMedium?.copyWith(color: context.cs.onPrimary, height: 1.45),
+                )
+              : ChatMarkdown(
+                  text: message.text,
+                  style: context.tt.bodyMedium!.copyWith(color: oc.ink, height: 1.45),
+                ),
     );
     if (mine) {
       return Align(alignment: Alignment.centerRight, child: bubble);

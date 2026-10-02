@@ -18,7 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from chatbot.orbit_agent import OrbitAgent, load_api_key  # noqa: E402
+from chatbot.orbit_agent import OrbitAgent, SearchLocation, load_api_key  # noqa: E402
 from chatbot.prompts import SUGGESTED_PROMPTS  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -30,10 +30,17 @@ class AssistantMessage(BaseModel):
     text: str = Field(min_length=1, max_length=8_000)
 
 
+class AssistantPlace(BaseModel):
+    city: str = Field(default="", max_length=80)
+    state: str = Field(default="", max_length=80)
+    university: str = Field(default="", max_length=120)
+
+
 class AssistantChatRequest(BaseModel):
     messages: list[AssistantMessage] = Field(min_length=1, max_length=40)
     session_id: str | None = Field(default=None, max_length=200)
     context: str | None = Field(default=None, max_length=6_000)
+    place: AssistantPlace | None = None
 
 
 class AssistantPromptsResponse(BaseModel):
@@ -49,13 +56,13 @@ class AgentRegistry:
         self._turns: dict[int, threading.Lock] = {}
         self._guard = threading.Lock()
 
-    def open(self, session_id: str | None) -> OrbitAgent:
+    def open(self, session_id: str | None, place: SearchLocation) -> OrbitAgent:
         if session_id:
             with self._guard:
                 existing = self._agents.get(session_id)
             if existing is not None:
                 return existing
-        return OrbitAgent(api_key=self._api_key)
+        return OrbitAgent(api_key=self._api_key, location=place)
 
     def turn_lock(self, agent: OrbitAgent) -> threading.Lock:
         with self._guard:
@@ -122,7 +129,13 @@ async def assistant_chat(payload: AssistantChatRequest, request: Request) -> Str
     history = [message.model_dump() for message in payload.messages]
 
     def generate() -> Iterator[bytes]:
-        agent = registry.open(payload.session_id)
+        saved = payload.place
+        place = SearchLocation.from_place(
+            city=saved.city if saved else "",
+            state=saved.state if saved else "",
+            university=saved.university if saved else "",
+        )
+        agent = registry.open(payload.session_id, place)
         with registry.turn_lock(agent):
             try:
                 for chunk in agent.reply(history, context=payload.context):

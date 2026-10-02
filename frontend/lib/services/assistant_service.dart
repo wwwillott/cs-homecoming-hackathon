@@ -56,6 +56,7 @@ class ModeAssistantService implements AssistantService {
 class ApiAssistantService implements AssistantService {
   ApiAssistantService({
     required this.networkContext,
+    required this.place,
     String apiUrl = const String.fromEnvironment(
       'ORBIT_API_URL',
       defaultValue: 'http://127.0.0.1:8000',
@@ -67,6 +68,7 @@ class ApiAssistantService implements AssistantService {
         _client = client ?? http.Client();
 
   final String Function() networkContext;
+  final Map<String, String> Function() place;
   final Uri _apiUri;
   final String? Function()? _sharedLabel;
   final http.Client _client;
@@ -108,6 +110,7 @@ class ApiAssistantService implements AssistantService {
     request.body = jsonEncode({
       'session_id': _sessionId,
       'context': networkContext(),
+      'place': place(),
       'messages': [
         for (final message in history) {'role': message.role.name, 'text': message.text},
       ],
@@ -170,6 +173,56 @@ String networkBrief({required List<Contact> contacts, required String userName})
     return '- ${contact.name}${role.isEmpty ? '' : ', $role'}.$met';
   });
   return '$who knows ${contacts.length} people:\n${lines.join('\n')}';
+}
+
+/// A few apps for the Ask Spruce chip. A smaller tree gets places to meet
+/// people. Past 30 people, the picks shift toward helping the network you have.
+/// The list is shuffled so each tap is a different handful.
+String spruceAppSuggestion({required int people, required bool recruiter}) {
+  const meet = [
+    (name: 'Luma', why: 'Follow a local calendar and show up where the same people return.'),
+    (name: 'Meetup', why: 'Pick one group and go more than once. Regulars become real connections.'),
+    (name: 'Devpost', why: 'A hackathon lets you work beside people instead of only swapping names.'),
+    (name: 'Handshake', why: 'Career fairs and info sessions put you in the room with peers and employers.'),
+    (name: 'Partiful', why: 'Smaller invites are where a lot of campus and community gatherings happen.'),
+    (name: 'Discord', why: 'Join one community you care about and actually talk there this week.'),
+  ];
+  const meetCandidates = [
+    (name: 'Handshake', why: 'Host or attend an info session and meet students who fit the roles.'),
+    (name: 'Devpost', why: 'Judge or sponsor a hackathon and see how people build.'),
+    (name: 'Major League Hacking', why: 'The student hackathon season is a direct way to meet builders.'),
+    (name: 'Luma', why: 'A small technical meetup brings the right candidates to you.'),
+    (name: 'Meetup', why: 'A recurring local group is an easy place to meet people more than once.'),
+  ];
+  const help = [
+    (name: 'ADPList', why: 'Offer a short mentoring chat to someone a step behind you.'),
+    (name: 'LinkedIn', why: 'Introduce two people who should know each other, and say why.'),
+    (name: 'Toastmasters', why: 'A weekly club makes the intros and talks you give more useful.'),
+    (name: 'GitHub', why: 'Help on a project someone you know cares about.'),
+    (name: 'Fishbowl', why: 'Answer a question in your field from what you have already learned.'),
+    (name: 'Peerlist', why: 'Share what you are building so people in your tree can collaborate.'),
+  ];
+  const helpCandidates = [
+    (name: 'LinkedIn', why: 'Make a specific intro between a candidate and someone who can help them.'),
+    (name: 'ADPList', why: 'Offer office hours so people you have met can ask for advice.'),
+    (name: 'Fishbowl', why: 'Answer candid questions about roles and teams you actually know.'),
+    (name: 'Discord', why: 'Stay in a community you recruit from and help people there, not only pitch them.'),
+  ];
+
+  final established = people > 30;
+  final pool = switch ((established, recruiter)) {
+    (false, false) => meet,
+    (false, true) => meetCandidates,
+    (true, false) => help,
+    (true, true) => helpCandidates,
+  };
+  final picked = [...pool]..shuffle();
+  final lines = picked.take(3).map((app) => '• ${app.name}: ${app.why}').join('\n');
+  final count = '$people ${people == 1 ? 'person' : 'people'}';
+  final intro = established
+      ? 'Your tree has $count, so you can start helping the people you already know.'
+      : 'Your tree has $count, so the useful next step is still meeting new people.';
+  return '$intro\n\n$lines\n\nPick one and use it this week.';
 }
 
 /// Stand-in used until the backend endpoint is wired up. Answers from the
@@ -319,28 +372,8 @@ class MockAssistantService implements AssistantService {
         'They\'re where most of your strongest ties came from.';
   }
 
-  String _apps(List<Contact> list) {
-    final event = _top(list.map((c) => c.metAt));
-    final source = event == null
-        ? ''
-        : 'A lot of your strongest connections came from $event, so look for similar events first.\n\n';
-    if (mode() == UserMode.recruiter) {
-      return '${source}Here\'s where I\'d spend your time to find strong candidates:\n\n'
-          '• Devpost and Major League Hacking: sponsor or judge a hackathon to see how people actually build.\n'
-          '• Handshake: host an info session and message students who match your roles.\n'
-          '• Luma: host a small technical meetup so the right people come to you.\n'
-          '• GitHub: find engineers through the projects they contribute to.\n'
-          '• LinkedIn: search second-degree connections before reaching out cold.\n\n'
-          'Pick one event channel and one community and show up consistently for a month.';
-    }
-    return '${source}Here\'s where I\'d start:\n\n'
-        '• Luma: follow a few local tech calendars. The same people keep showing up, which makes a second hello easy.\n'
-        '• Meetup: pick one group and go three times. Regulars become real connections.\n'
-        '• Devpost: a hackathon lets you work alongside people and meet sponsors.\n'
-        '• Discord: join a community you care about and answer questions. Helping is the best intro.\n'
-        '• LinkedIn: connect within a day of meeting someone, with a note about where you met.\n\n'
-        'Start with one events app and one community, and record a quick recap in Spruce after each conversation.';
-  }
+  String _apps(List<Contact> list) =>
+      spruceAppSuggestion(people: list.length, recruiter: mode() == UserMode.recruiter);
 
   String _overview(List<Contact> list) {
     final strongest = [...list]..sort((a, b) => b.strength.compareTo(a.strength));

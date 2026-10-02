@@ -362,34 +362,30 @@ class _Principle {
 
 const _principles = [
   _Principle(
-    Icons.grass_rounded,
-    'Roots before branches',
-    'Your strongest ties are the trunk everything else grows from. Invest in the few people who '
-        'know you well before chasing the many who don\'t.',
-  ),
-  _Principle(
-    Icons.account_tree_outlined,
-    'Grow from what you have',
-    'New branches sprout from existing ones. The best introductions come through people who '
-        'already trust you, so ask for warm intros instead of sending cold messages.',
-  ),
-  _Principle(
     Icons.water_drop_outlined,
-    'Nourish, don\'t harvest',
-    'Give before you ask. Share an article, make an intro, check in with no agenda. '
-        'A relationship that only gets used will wither.',
+    'Focus on nurturing',
+    'Many people feel dirty when they make networking instrumental. Instead, build your network by '
+        'focusing on service, opening your tree with a water pail rather than a bucket for apples.',
   ),
   _Principle(
-    Icons.eco_outlined,
-    'Tend it a little, often',
-    'A short note every few weeks keeps a connection green. Fresh leaves on your tree mean you\'ve '
-        'been in touch lately; autumn tones are a nudge to reach out.',
+    Icons.alt_route_rounded,
+    'Weak ties are bridges',
+    'Studies show that weak ties — people you know but don\'t stay active with — are the ones who '
+        'can bridge you to new experiences. Weak ties are the ones we\'re most likely to forget about, '
+        'which is where Spruce comes in.',
   ),
   _Principle(
-    Icons.wb_twilight_rounded,
-    'Every branch has seasons',
-    'Some ties go quiet, and that\'s natural. A dormant branch can bloom again with one '
-        'thoughtful message. Remembering the details is what makes that possible.',
+    Icons.handshake_outlined,
+    'Referrals make you an asset',
+    'As online application pools have grown to oceans, even hiring managers prefer strong referrals. '
+        'Knowing someone who needs to fill a vacant position makes you an asset, not an annoyance.',
+  ),
+  _Principle(
+    Icons.autorenew_rounded,
+    'Reconnect with old friends',
+    'Reconnecting with once strong ties leads to both novelty and trust, a combination of their new '
+        'social setting and your old friendship. Spruce puts reconnecting back on your mind when the '
+        'pressures of life turn us inward.',
   ),
 ];
 
@@ -725,11 +721,12 @@ class _PhilosophyText extends StatelessWidget {
           style: context.tt.labelSmall?.copyWith(color: accent, letterSpacing: 1.4),
         ),
         const SizedBox(height: 8),
-        Text('Networks grow like trees.', style: context.tt.headlineMedium),
+        Text('Your network should be your own.', style: context.tt.headlineMedium),
         const SizedBox(height: 10),
         Text(
-          'A network isn\'t a stack of business cards. It\'s something living: it grows slowly, '
-          'from the roots up, and it needs a little care to stay healthy.',
+          'Spruce helps you track your network and points you towards resources without systematizing '
+          'your friendships. Backed by decades of social network research, we designed this app to be an '
+          'organizational tool, not an automated agent. Spruce organizes your tree. You nurture it.',
           style: context.tt.bodyLarge?.copyWith(color: oc.muted, height: 1.5),
         ),
         const SizedBox(height: 28),

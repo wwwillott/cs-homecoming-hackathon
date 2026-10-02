@@ -61,6 +61,7 @@ class AppState extends ChangeNotifier {
       return '$brief\n\nShared mode is on with ${shared.label}. '
           'People from that attached tree are included above and marked read-only.';
     },
+    place: () => {'city': city, 'state': homeState, 'university': university},
     sharedLabel: () => activeSharedTree?.shortLabel,
   );
   late final MockAssistantService _mockAssistant = MockAssistantService(
@@ -98,6 +99,9 @@ class AppState extends ChangeNotifier {
   UserMode mode = UserMode.seeker;
   ThemeMode themeMode = ThemeMode.system;
   String userName = '';
+  String city = '';
+  String homeState = '';
+  String university = '';
 
   bool get isSignedIn => userId != null && userId!.isNotEmpty;
 
@@ -198,6 +202,9 @@ class AppState extends ChangeNotifier {
     onboarded = prefs.getBool(_pref('onboarded')) ?? false;
     mode = UserMode.fromName(prefs.getString(_pref('mode')));
     userName = prefs.getString(_pref('userName')) ?? '';
+    city = prefs.getString(_pref('city')) ?? '';
+    homeState = prefs.getString(_pref('state')) ?? '';
+    university = prefs.getString(_pref('university')) ?? '';
     _setContacts(await repository.loadAll());
     _treeLevelSeen = prefs.getInt(_pref('treeGoalsSeen')) ?? treeLevel;
   }
@@ -278,6 +285,9 @@ class AppState extends ChangeNotifier {
       await prefs.remove(_pref('onboarded'));
       await prefs.remove(_pref('mode'));
       await prefs.remove(_pref('userName'));
+      await prefs.remove(_pref('city'));
+      await prefs.remove(_pref('state'));
+      await prefs.remove(_pref('university'));
       await prefs.remove(_pref('treeGoalsSeen'));
       await prefs.remove('orbit.contacts.$userId');
     }
@@ -311,6 +321,25 @@ class AppState extends ChangeNotifier {
     assistant.reset();
     notifyListeners();
     SharedPreferences.getInstance().then((prefs) => prefs.setBool(_kDemo, value));
+  }
+
+  void setPlace({required String city, required String state, required String university}) {
+    final nextCity = city.trim();
+    final nextState = state.trim();
+    final nextSchool = university.trim();
+    if (nextCity == this.city && nextState == homeState && nextSchool == this.university) return;
+    this.city = nextCity;
+    homeState = nextState;
+    this.university = nextSchool;
+    assistantEpoch++;
+    assistant.reset();
+    notifyListeners();
+    if (!isSignedIn) return;
+    SharedPreferences.getInstance().then((prefs) async {
+      await prefs.setString(_pref('city'), this.city);
+      await prefs.setString(_pref('state'), homeState);
+      await prefs.setString(_pref('university'), this.university);
+    });
   }
 
   void setThemeMode(ThemeMode value) {

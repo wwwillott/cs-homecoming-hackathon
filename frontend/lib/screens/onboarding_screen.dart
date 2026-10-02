@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../models/user_mode.dart';
@@ -63,7 +61,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            const SizedBox(height: 360, child: _Hero(large: false)),
+            const _Hero(large: false),
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 26, 22, 32),
               child: SafeArea(top: false, child: form),
@@ -75,25 +73,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _Hero extends StatefulWidget {
+class _Hero extends StatelessWidget {
   const _Hero({required this.large});
   final bool large;
-
-  @override
-  State<_Hero> createState() => _HeroState();
-}
-
-class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 60),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,142 +87,44 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
           colors: [Color(0xFF070D09), Color(0xFF0E2215), Color(0xFF173A22)],
         ),
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: RepaintBoundary(
-              child: CustomPaint(painter: _OrbitArtPainter(_c)),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(widget.large ? 48 : 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: large ? const EdgeInsets.all(48) : const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: large ? MainAxisAlignment.center : MainAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      const OrbitLogo(size: 36),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Spruce',
-                        style: context.tt.titleLarge?.copyWith(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  FadeSlideIn(
-                    child: Text(
-                      'Every connection,\non one tree.',
-                      style: (widget.large ? context.tt.displaySmall : context.tt.headlineMedium)
-                          ?.copyWith(color: Colors.white, height: 1.1),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FadeSlideIn(
-                    index: 2,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: Text(
-                        'Remember who you met, where you met them, and how strong the connection is. Then see your whole network at a glance.',
-                        style: context.tt.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.72),
-                          fontSize: widget.large ? 16 : 14,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const OrbitLogo(size: 32),
+                  const SizedBox(width: 10),
+                  Text('Spruce', style: context.tt.titleMedium?.copyWith(color: Colors.white)),
                 ],
               ),
-            ),
+              SizedBox(height: large ? 40 : 28),
+              FadeSlideIn(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Know who you\nknow.',
+                    style: context.tt.displayLarge?.copyWith(
+                      color: Colors.white,
+                      fontSize: large ? 76 : 50,
+                      fontWeight: FontWeight.w800,
+                      height: 1.02,
+                      letterSpacing: -1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
-}
-
-class _OrbitArtPainter extends CustomPainter {
-  _OrbitArtPainter(this.animation) : super(repaint: animation);
-  final Animation<double> animation;
-
-  static final _dots = List.generate(18, (i) {
-    final rnd = math.Random(i * 7919 + 3);
-    return (
-      ring: i % 3,
-      phase: rnd.nextDouble() * math.pi * 2,
-      speed: 0.6 + rnd.nextDouble() * 0.8,
-      strength: 2 + rnd.nextInt(9),
-      size: 4.0 + rnd.nextDouble() * 6,
-    );
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width * 0.68, size.height * 0.4);
-    final base = math.min(size.width, size.height) * 0.16;
-    final t = animation.value * math.pi * 2;
-
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.08);
-    for (var r = 0; r < 3; r++) {
-      canvas.drawCircle(center, base * (1 + r * 0.75), ringPaint);
-    }
-
-    final positions = <Offset>[];
-    for (final d in _dots) {
-      final radius = base * (1 + d.ring * 0.75);
-      final angle = d.phase + t * d.speed * (d.ring.isEven ? 1 : -1);
-      positions.add(center + Offset(math.cos(angle), math.sin(angle) * 0.92) * radius);
-    }
-
-    for (var i = 0; i < _dots.length; i++) {
-      final d = _dots[i];
-      final color = AppColors.strength(d.strength);
-      canvas.drawLine(
-        center,
-        positions[i],
-        Paint()
-          ..strokeWidth = 0.5 + d.strength * 0.18
-          ..color = color.withValues(alpha: 0.1 + d.strength * 0.02),
-      );
-    }
-
-    for (var i = 0; i < _dots.length; i++) {
-      final d = _dots[i];
-      final color = AppColors.strength(d.strength);
-      if (d.strength >= 8) {
-        canvas.drawCircle(
-          positions[i],
-          d.size + 6,
-          Paint()
-            ..color = color.withValues(alpha: 0.35)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-        );
-      }
-      canvas.drawCircle(positions[i], d.size, Paint()..color = color);
-    }
-
-    canvas.drawCircle(
-      center,
-      base * 0.42,
-      Paint()
-        ..color = AppColors.freshLeaf.withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26),
-    );
-    canvas.drawCircle(
-      center,
-      base * 0.3,
-      Paint()
-        ..shader = const LinearGradient(colors: [AppColors.freshLeaf, AppColors.spruce])
-            .createShader(Rect.fromCircle(center: center, radius: base * 0.3)),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_OrbitArtPainter old) => false;
 }
 
 class _Form extends StatelessWidget {

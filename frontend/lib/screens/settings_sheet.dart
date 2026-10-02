@@ -54,6 +54,15 @@ class _SettingsBody extends StatelessWidget {
           const SizedBox(height: 6),
           Text(app.mode.description, style: context.tt.bodySmall),
           const SizedBox(height: 20),
+          Text('Where you are', style: context.tt.labelMedium),
+          const SizedBox(height: 6),
+          Text(
+            'Spruce uses this when you ask for events and local introductions.',
+            style: context.tt.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          const _PlaceFields(),
+          const SizedBox(height: 20),
           Text('Appearance', style: context.tt.labelMedium),
           const SizedBox(height: 8),
           SegmentedButton<ThemeMode>(
@@ -144,6 +153,110 @@ class _SettingsBody extends StatelessWidget {
       ),
     );
     return result ?? false;
+  }
+}
+
+class _PlaceFields extends StatefulWidget {
+  const _PlaceFields();
+
+  @override
+  State<_PlaceFields> createState() => _PlaceFieldsState();
+}
+
+class _PlaceFieldsState extends State<_PlaceFields> {
+  final _city = TextEditingController();
+  final _state = TextEditingController();
+  final _university = TextEditingController();
+  final _cityFocus = FocusNode();
+  final _stateFocus = FocusNode();
+  final _universityFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    for (final focus in [_cityFocus, _stateFocus, _universityFocus]) {
+      focus.addListener(() {
+        if (!focus.hasFocus) _commit();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _commit();
+    _cityFocus.dispose();
+    _stateFocus.dispose();
+    _universityFocus.dispose();
+    _city.dispose();
+    _state.dispose();
+    _university.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final app = AppScope.of(context);
+    _show(_city, _cityFocus, app.city);
+    _show(_state, _stateFocus, app.homeState);
+    _show(_university, _universityFocus, app.university);
+  }
+
+  void _show(TextEditingController controller, FocusNode focus, String value) {
+    if (focus.hasFocus || controller.text == value) return;
+    controller.text = value;
+  }
+
+  void _commit() {
+    if (!mounted) return;
+    AppScope.read(context).setPlace(
+      city: _city.text,
+      state: _state.text,
+      university: _university.text,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          controller: _city,
+          focusNode: _cityFocus,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          onEditingComplete: _commit,
+          decoration: const InputDecoration(
+            labelText: 'City',
+            prefixIcon: Icon(Icons.location_city_outlined),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _state,
+          focusNode: _stateFocus,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          onEditingComplete: _commit,
+          decoration: const InputDecoration(
+            labelText: 'State',
+            prefixIcon: Icon(Icons.map_outlined),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _university,
+          focusNode: _universityFocus,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.done,
+          onEditingComplete: _commit,
+          decoration: const InputDecoration(
+            labelText: 'University (optional)',
+            prefixIcon: Icon(Icons.school_outlined),
+          ),
+        ),
+      ],
+    );
   }
 }
 
