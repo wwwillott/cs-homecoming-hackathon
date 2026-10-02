@@ -37,12 +37,12 @@ If you cannot find upcoming events, say so and name the calendars you checked.
 """.strip()
 
 SUGGESTED_PROMPTS = [
-    "Find events near me",
+    "Find events near Provo, Utah",
     "Find alumni from my university in a company or field",
 ]
 
-# Extra task attached only when the user picks the events chip, so "near me"
-# becomes a concrete web search without changing the chip text.
+# Extra task attached only when the user asks for events near a place, so the
+# chip becomes a concrete web search without changing the chip text.
 FIND_EVENTS_TASK = (
     "Search the live web for upcoming events near {place}. "
     "Focus on networking, meetups, and growing professional connections. "

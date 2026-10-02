@@ -28,11 +28,13 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     vsync: this,
     duration: const Duration(milliseconds: 1600),
   );
-  final _levels = ValueNotifier<List<double>>(List.filled(48, 0.05));
+  final _level = ValueNotifier<double>(0);
+  double _targetLevel = 0;
+  Duration _lastTick = Duration.zero;
   final _transcriptScroll = ScrollController();
-  final _rnd = math.Random();
   final List<Timer> _timers = [];
   StreamSubscription<RecapProgress>? _progressSubscription;
+  StreamSubscription<double>? _levelSubscription;
   RecapService? _recapService;
 
   Duration _elapsed = Duration.zero;
@@ -57,9 +59,10 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     }
     _ticker.dispose();
     _pulse.dispose();
-    _levels.dispose();
+    _level.dispose();
     _transcriptScroll.dispose();
     _progressSubscription?.cancel();
+    _levelSubscription?.cancel();
     if (_phase == _Phase.recording) unawaited(_recapService?.cancel());
     super.dispose();
   }
@@ -79,10 +82,14 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     _recapService = service;
     await _progressSubscription?.cancel();
     _progressSubscription = service.progress.listen(_onProgress);
+    await _levelSubscription?.cancel();
+    _targetLevel = 0;
+    _levelSubscription = service.inputLevel.listen((level) => _targetLevel = level);
     try {
       await service.start(kind: _kind);
       _pulse.repeat();
       if (_ticker.isActive) _ticker.stop();
+      _lastTick = Duration.zero;
       _ticker.start();
     } catch (error) {
       await service.cancel();
@@ -95,15 +102,11 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
   }
 
   void _onTick(Duration elapsed) {
-    final secs = elapsed.inMilliseconds / 1000;
-
-    final prev = _levels.value;
-    final next = List<double>.generate(prev.length, (i) {
-      if (i < prev.length - 1) return prev[i + 1];
-      final base = 0.35 + 0.3 * math.sin(secs * 7.3) * math.sin(secs * 2.1 + 1);
-      return (base + _rnd.nextDouble() * 0.45).clamp(0.08, 1.0);
-    });
-    _levels.value = next;
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    final rising = _targetLevel > _level.value;
+    final rate = rising ? 18.0 : 5.0;
+    _level.value += (_targetLevel - _level.value) * (1 - math.exp(-rate * dt));
 
     if (elapsed.inSeconds != _elapsed.inSeconds) {
       setState(() {
@@ -131,6 +134,9 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
     if (_phase != _Phase.recording) return;
     _ticker.stop();
     _pulse.stop();
+    _levelSubscription?.cancel();
+    _targetLevel = 0;
+    _level.value = 0;
     setState(() {
       _phase = _Phase.processing;
       _processingStep = 0;
@@ -241,7 +247,7 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
                                     key: const ValueKey('r'),
                                     phase: _phase,
                                     clock: _clock,
-                                    levels: _levels,
+                                    level: _level,
                                     pulse: _pulse,
                                     error: _error,
                                     status: _phase == _Phase.recording ? _connectionMessage : null,
@@ -282,7 +288,7 @@ class _RecorderBody extends StatelessWidget {
     super.key,
     required this.phase,
     required this.clock,
-    required this.levels,
+    required this.level,
     required this.pulse,
     required this.onTap,
     this.error,
@@ -291,7 +297,7 @@ class _RecorderBody extends StatelessWidget {
 
   final _Phase phase;
   final String clock;
-  final ValueNotifier<List<double>> levels;
+  final ValueNotifier<double> level;
   final Animation<double> pulse;
   final VoidCallback onTap;
   final String? error;
@@ -310,7 +316,7 @@ class _RecorderBody extends StatelessWidget {
             height: 70,
             width: double.infinity,
             child: RepaintBoundary(
-              child: CustomPaint(painter: _WavePainter(levels, recording)),
+              child: CustomPaint(painter: _WavePainter(level, recording)),
             ),
           ),
         ),
@@ -434,30 +440,32 @@ class _PulsePainter extends CustomPainter {
   bool shouldRepaint(_PulsePainter old) => old.t != t;
 }
 
+/// A few centered bars that scale together with the microphone level.
 class _WavePainter extends CustomPainter {
-  _WavePainter(this.levels, this.active) : super(repaint: levels);
-  final ValueNotifier<List<double>> levels;
+  _WavePainter(this.level, this.active) : super(repaint: level);
+  final ValueNotifier<double> level;
   final bool active;
+
+  static const _profile = [0.4, 0.7, 1.0, 0.7, 0.4];
+  static const _barWidth = 8.0;
+  static const _gap = 10.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final values = levels.value;
-    final n = values.length;
-    final gap = 4.0;
-    final barW = (size.width - gap * (n - 1)) / n;
+    final value = active ? level.value : 0.0;
+    final total = _profile.length * _barWidth + (_profile.length - 1) * _gap;
+    final left = (size.width - total) / 2;
     final mid = size.height / 2;
-    for (var i = 0; i < n; i++) {
-      final h = math.max(4.0, values[i] * size.height);
-      final x = i * (barW + gap);
-      final t = i / (n - 1);
-      final color = Color.lerp(AppColors.spruce, AppColors.freshLeaf, t)!;
-      final fade = math.min(1.0, math.min(t, 1 - t) * 6);
+    final paint = Paint()..color = AppColors.freshLeaf.withValues(alpha: active ? 0.9 : 0.5);
+    for (var i = 0; i < _profile.length; i++) {
+      final h = _barWidth + value * _profile[i] * (size.height - _barWidth);
+      final x = left + i * (_barWidth + _gap) + _barWidth / 2;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(x + barW / 2, mid), width: barW, height: h),
-          Radius.circular(barW),
+          Rect.fromCenter(center: Offset(x, mid), width: _barWidth, height: h),
+          const Radius.circular(_barWidth / 2),
         ),
-        Paint()..color = color.withValues(alpha: (active ? 0.95 : 0.6) * (0.25 + 0.75 * fade)),
+        paint,
       );
     }
   }

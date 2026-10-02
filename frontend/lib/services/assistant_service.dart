@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/contact.dart';
 import '../models/user_mode.dart';
+import 'api_config.dart';
 
 enum ChatRole { user, assistant }
 
@@ -57,10 +58,7 @@ class ApiAssistantService implements AssistantService {
   ApiAssistantService({
     required this.networkContext,
     required this.place,
-    String apiUrl = const String.fromEnvironment(
-      'ORBIT_API_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    String apiUrl = apiBaseUrl,
     String? Function()? sharedLabel,
     http.Client? client,
   })  : _apiUri = Uri.parse(apiUrl),
@@ -94,12 +92,15 @@ class ApiAssistantService implements AssistantService {
           for (final item in body['prompts'] as List? ?? const [])
             if (item is String && item.trim().isNotEmpty) item,
         ];
-        if (prompts.isNotEmpty) return _withAlumni(prompts);
+        return _withAlumni([
+          eventsPromptChip,
+          ...prompts.where((prompt) => !prompt.toLowerCase().startsWith('find events')),
+        ]);
       }
     } catch (_) {
       // The chip still shows so a failed backend is visible when they send it.
     }
-    return _withAlumni(const ['Find events near me']);
+    return _withAlumni(const [eventsPromptChip]);
   }
 
   @override
@@ -138,6 +139,10 @@ class ApiAssistantService implements AssistantService {
           if (sessionId is String && sessionId.isNotEmpty) _sessionId = sessionId;
           final error = data['error'];
           if (error != null) throw StateError(error.toString());
+          if (data['done'] == true) {
+            if (!received) throw StateError('The assistant returned an empty reply.');
+            return;
+          }
           final delta = data['delta'];
           if (delta is String && delta.isNotEmpty) {
             received = true;
@@ -158,6 +163,7 @@ class ApiAssistantService implements AssistantService {
   }
 }
 
+const eventsPromptChip = 'Find events near Provo, Utah';
 const alumniPromptChip = 'Find alumni from my university in a company or field';
 
 List<String> _withAlumni(List<String> prompts) {
@@ -276,9 +282,11 @@ class MockAssistantService implements AssistantService {
   }
 
   List<String> _prompts(List<String> prompts) {
-    const events = 'Find events near me';
-    const alumni = 'Find alumni from my university in a company or field';
-    return [events, alumni, ...prompts.where((prompt) => prompt != events && prompt != alumni)];
+    return [
+      eventsPromptChip,
+      alumniPromptChip,
+      ...prompts.where((prompt) => prompt != eventsPromptChip && prompt != alumniPromptChip),
+    ];
   }
 
   @override

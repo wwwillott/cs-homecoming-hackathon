@@ -22,6 +22,12 @@ class _AuthScreenState extends State<AuthScreen> {
   var _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    AppScope.read(context).authService.wake();
+  }
+
+  @override
   void dispose() {
     _username.dispose();
     _password.dispose();
@@ -30,6 +36,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   /// Signing in never blocks: blank fields use the guest account, unknown usernames are
   /// registered on the fly, and an unreachable server falls back to an on-device session.
+  /// The timeout covers a free-tier host waking from sleep; offline devices fail immediately.
   Future<void> _submit() async {
     final typed = _username.text.trim();
     final username = typed.isEmpty ? _guestUsername : typed;
@@ -40,7 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
     AuthSession session;
     try {
       session = await _serverSession(app.authService, username, password)
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 60));
     } catch (_) {
       session = AuthSession(userId: 'local-${username.toLowerCase()}', username: username);
     }

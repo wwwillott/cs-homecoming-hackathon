@@ -9,6 +9,7 @@ No HTTP server lives here. Import OrbitAgent from the route that owns chat.
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -273,8 +274,9 @@ class OrbitAgent:
         self.client.beta.agents.sessions.delete(session_id)
 
     def _prepare(self, text: str) -> str:
-        if _is_find_events(text):
-            task = FIND_EVENTS_TASK.format(place=self.location.label)
+        place = _find_events_place(text)
+        if place is not None:
+            task = FIND_EVENTS_TASK.format(place=place or self.location.label)
             if self.location.university:
                 task += f" Prefer events at or near {self.location.university}."
             return f"{text.strip()}\n\n{task}"
@@ -380,9 +382,16 @@ class OrbitAgent:
             raise RuntimeError("Stream closed before the agent finished.")
 
 
-def _is_find_events(text: str) -> bool:
-    normalized = " ".join(text.lower().replace("?", "").split())
-    return normalized in {"find events near me", "find events nearby"}
+def _find_events_place(text: str) -> str | None:
+    """The place named in an events request, "" for near me, or None if it isn't one."""
+    normalized = " ".join(text.replace("?", "").split())
+    if normalized.lower() == "find events nearby":
+        return ""
+    match = re.fullmatch(r"find events near (.+)", normalized, flags=re.IGNORECASE)
+    if match is None:
+        return None
+    place = match.group(1).strip(" .")
+    return "" if place.lower() == "me" else place
 
 
 def _is_find_alumni(text: str) -> bool:

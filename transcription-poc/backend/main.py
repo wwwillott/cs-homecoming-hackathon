@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from agent_chat import build_registry
 from agent_chat import router as assistant_router
+from auth import router as auth_router
 from database.session import AsyncSessionFactory
 from models import (
     CapabilitiesResponse,
@@ -20,7 +21,6 @@ from models import (
     SummaryRequest,
     TranscriptionResponse,
 )
-from auth import router as auth_router
 from network_api import router as network_router
 from providers import (
     SummaryProvider,
@@ -28,6 +28,9 @@ from providers import (
     VertexGeminiProvider,
 )
 from streaming_transcription import router as streaming_router
+
+# Always allowed on top of CORS_ORIGIN_REGEX so a dashboard override can't lock out the app.
+TRUSTED_ORIGIN_REGEX = r"https?://((www\.)?spruce\.my|localhost|127\.0\.0\.1)(:\d+)?"
 
 
 class Settings(BaseSettings):
@@ -62,6 +65,12 @@ class Settings(BaseSettings):
     @property
     def parsed_cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def cors_regex(self) -> str:
+        if not self.cors_origin_regex:
+            return TRUSTED_ORIGIN_REGEX
+        return f"(?:{self.cors_origin_regex})|(?:{TRUSTED_ORIGIN_REGEX})"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -100,7 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=active_settings.parsed_cors_origins,
-        allow_origin_regex=active_settings.cors_origin_regex,
+        allow_origin_regex=active_settings.cors_regex,
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -7,14 +8,12 @@ import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/contact.dart';
+import 'api_config.dart';
 import 'recap_service.dart';
 
 class ApiRecapService implements RecapService {
   ApiRecapService({
-    String apiUrl = const String.fromEnvironment(
-      'ORBIT_API_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    String apiUrl = apiBaseUrl,
     this._userId,
     AudioRecorder? recorder,
     http.Client? client,
@@ -30,6 +29,7 @@ class ApiRecapService implements RecapService {
   final AudioRecorder _recorder;
   final http.Client _client;
   final _progress = StreamController<RecapProgress>.broadcast();
+  final _level = StreamController<double>.broadcast();
   final Map<int, Uint8List> _pending = {};
   final Map<int, Uint8List> _recentAcknowledged = {};
   final List<int> _carry = [];
@@ -52,6 +52,9 @@ class ApiRecapService implements RecapService {
 
   @override
   Stream<RecapProgress> get progress => _progress.stream;
+
+  @override
+  Stream<double> get inputLevel => _level.stream;
 
   Uri get _webSocketUri {
     final scheme = _apiUri.scheme == 'https' ? 'wss' : 'ws';
@@ -189,12 +192,24 @@ class ApiRecapService implements RecapService {
         );
         break;
       case 'error':
-        _emit(message: event['message'] as String? ?? 'Transcription failed.');
+        // The server closes the socket after an error, so reconnecting would only loop.
+        final error = _describeError(event['message'] as String? ?? '');
+        _active = false;
+        if (!(_ready?.isCompleted ?? true)) _ready!.completeError(StateError(error));
+        if (!(_complete?.isCompleted ?? true)) _complete!.completeError(StateError(error));
+        _emit(message: error);
         break;
       case 'complete':
         if (!(_complete?.isCompleted ?? true)) _complete!.complete();
         break;
     }
+  }
+
+  String _describeError(String message) {
+    if (message.contains('403') || message.contains('Permission')) {
+      return 'Voice transcription is not set up on the server yet (Google Cloud permission denied).';
+    }
+    return message.isEmpty ? 'Transcription failed.' : 'Transcription stopped: $message';
   }
 
   void _handleSocketClosed(WebSocketChannel source, [Object? error]) {
@@ -211,6 +226,7 @@ class ApiRecapService implements RecapService {
   }
 
   void _acceptAudio(Uint8List bytes) {
+    _reportLevel(bytes);
     if (!_active) return;
     _carry.addAll(bytes);
     while (_carry.length >= _chunkBytes) {
@@ -218,6 +234,21 @@ class ApiRecapService implements RecapService {
       _carry.removeRange(0, _chunkBytes);
       _queueChunk(pcm);
     }
+  }
+
+  /// RMS of 16-bit PCM mapped from -55 dBFS (silence) to 0 dBFS onto 0..1.
+  void _reportLevel(Uint8List pcm) {
+    if (_level.isClosed || pcm.length < 2) return;
+    final samples = ByteData.sublistView(pcm);
+    final count = pcm.length ~/ 2;
+    var sum = 0.0;
+    for (var i = 0; i < count; i++) {
+      final s = samples.getInt16(i * 2, Endian.little);
+      sum += s * s;
+    }
+    final rms = math.sqrt(sum / count) / 32768;
+    final db = rms <= 0 ? -100.0 : 20 * math.log(rms) / math.ln10;
+    _level.add(((db + 55) / 55).clamp(0.0, 1.0));
   }
 
   void _queueChunk(Uint8List pcm) {
@@ -356,5 +387,6 @@ class ApiRecapService implements RecapService {
     await _recorder.dispose();
     _client.close();
     await _progress.close();
+    await _level.close();
   }
 }

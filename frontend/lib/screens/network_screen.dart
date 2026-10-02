@@ -114,9 +114,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   _TopBar(
                     compact: narrow,
                     contacts: contacts,
-                    links: styler.edges.length,
                     onSearch: () => _openSearch(context, app),
-                    onFit: _fitAll,
                     onShare: () => _openShare(context, app),
                     onJoin: () => _openJoin(context, app),
                     onLeave: app.isSharedMode ? app.leaveSharedMode : null,
@@ -297,10 +295,6 @@ class _NetworkScreenState extends State<NetworkScreen> {
     if (id != null) _focusAndCenter(app, id);
   }
 
-  void _fitAll() {
-    _graph.fitToView();
-  }
-
   Future<void> _openShare(BuildContext context, AppState app) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -326,9 +320,7 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.compact,
     required this.contacts,
-    required this.links,
     required this.onSearch,
-    required this.onFit,
     required this.onShare,
     required this.onJoin,
     this.onLeave,
@@ -336,9 +328,7 @@ class _TopBar extends StatelessWidget {
 
   final bool compact;
   final List<Contact> contacts;
-  final int links;
   final VoidCallback onSearch;
-  final VoidCallback onFit;
   final VoidCallback onShare;
   final VoidCallback onJoin;
   final VoidCallback? onLeave;
@@ -352,43 +342,11 @@ class _TopBar extends StatelessWidget {
     final title = name.isEmpty ? 'Your tree' : "$name's tree";
 
     final controls = [
-      _OptionMenu<ColorBy>(
-        prefix: 'Color',
-        icon: Icons.palette_outlined,
-        value: app.colorBy,
-        values: ColorBy.values,
-        label: (v) => v.label,
-        iconOf: (v) => v.icon,
-        onSelected: app.setColorBy,
-        compact: compact,
-      ),
-      _OptionMenu<SizeBy>(
-        prefix: 'Size',
-        icon: Icons.bubble_chart_outlined,
-        value: app.sizeBy,
-        values: SizeBy.values,
-        label: (v) => v.label,
-        iconOf: (v) => v.icon,
-        onSelected: app.setSizeBy,
-        compact: compact,
-      ),
-      _GlassButton(
-        tooltip: app.showPeerLinks ? 'Hide who-knows-who links' : 'Show who-knows-who links',
-        active: app.showPeerLinks,
-        onTap: () => app.setShowPeerLinks(!app.showPeerLinks),
-        child: const Icon(Icons.hub_outlined, size: 18),
-      ),
       _GlassButton(tooltip: 'Share tree', onTap: onShare, child: const Icon(Icons.qr_code_2_rounded, size: 19)),
       _GlassButton(tooltip: 'Join a tree', onTap: onJoin, child: const Icon(Icons.login_rounded, size: 18)),
       if (onLeave != null)
         _GlassButton(tooltip: 'Leave shared mode', active: true, onTap: onLeave!, child: const Icon(Icons.link_off_rounded, size: 18)),
       _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
-      if (compact)
-        _GlassButton(
-          tooltip: 'Fit to screen',
-          onTap: onFit,
-          child: const Icon(Icons.center_focus_strong_outlined, size: 19),
-        ),
     ];
 
     final titleBlock = Column(
@@ -397,7 +355,7 @@ class _TopBar extends StatelessWidget {
       children: [
         Text(title, style: context.tt.headlineSmall),
         const SizedBox(height: 2),
-        Text('${contacts.length} people · $links mutual links', style: context.tt.bodySmall),
+        Text('${contacts.length} ${contacts.length == 1 ? 'person' : 'people'}', style: context.tt.bodySmall),
       ],
     );
 
@@ -481,7 +439,6 @@ class _OptionMenu<T> extends StatelessWidget {
     required this.label,
     required this.iconOf,
     required this.onSelected,
-    required this.compact,
   });
 
   final String prefix;
@@ -491,7 +448,6 @@ class _OptionMenu<T> extends StatelessWidget {
   final String Function(T) label;
   final IconData Function(T) iconOf;
   final ValueChanged<T> onSelected;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -566,12 +522,6 @@ class _ZoomControls extends StatelessWidget {
           onTap: () => controller.zoomBy(1 / 1.3),
           child: const Icon(Icons.remove_rounded),
         ),
-        const SizedBox(height: 6),
-        _GlassButton(
-          tooltip: 'Fit to screen',
-          onTap: controller.fitToView,
-          child: const Icon(Icons.center_focus_strong_outlined, size: 20),
-        ),
       ],
     );
   }
@@ -587,7 +537,7 @@ class _LegendButton extends StatelessWidget {
     final oc = context.oc;
     final accent = Theme.of(context).colorScheme.primary;
     return Tooltip(
-      message: open ? 'Hide legend' : 'What do the colors mean?',
+      message: open ? 'Hide options' : 'Color, size, and legend',
       child: Material(
         color: open ? accent.withValues(alpha: 0.12) : oc.surface.withValues(alpha: 0.94),
         shape: CircleBorder(side: BorderSide(color: open ? accent.withValues(alpha: 0.4) : oc.border)),
@@ -610,6 +560,7 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppScope.of(context);
     final oc = context.oc;
     final entries = styler.legend();
     return Container(
@@ -625,8 +576,16 @@ class _Legend extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Color: ${styler.colorBy.label}', style: context.tt.titleSmall),
-          const SizedBox(height: 10),
+          _OptionMenu<ColorBy>(
+            prefix: 'Color',
+            icon: Icons.palette_outlined,
+            value: app.colorBy,
+            values: ColorBy.values,
+            label: (v) => v.label,
+            iconOf: (v) => v.icon,
+            onSelected: app.setColorBy,
+          ),
+          const SizedBox(height: 12),
           AnimatedSize(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -673,6 +632,16 @@ class _Legend extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 Divider(color: oc.border),
+                const SizedBox(height: 8),
+                _OptionMenu<SizeBy>(
+                  prefix: 'Size',
+                  icon: Icons.bubble_chart_outlined,
+                  value: app.sizeBy,
+                  values: SizeBy.values,
+                  label: (v) => v.label,
+                  iconOf: (v) => v.icon,
+                  onSelected: app.setSizeBy,
+                ),
                 const SizedBox(height: 8),
                 _LegendLine(icon: Icons.bubble_chart_outlined, text: styler.sizeCaption),
                 const _LegendLine(icon: Icons.linear_scale_rounded, text: 'Closer, thicker line = stronger tie'),

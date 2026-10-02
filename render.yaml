@@ -16,7 +16,7 @@ services:
       - key: CORS_ORIGINS
         value: https://spruce.my,https://www.spruce.my
       - key: CORS_ORIGIN_REGEX
-        value: https://(www\.)?spruce\.my
+        value: https?://(www\.)?spruce\.my
       - key: DATABASE_URL
         sync: false
       - key: OPENAI_API_KEY

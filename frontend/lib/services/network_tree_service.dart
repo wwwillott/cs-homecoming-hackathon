@@ -4,13 +4,11 @@ import 'package:http/http.dart' as http;
 
 import '../models/contact.dart';
 import '../models/network_tree.dart';
+import 'api_config.dart';
 
 class NetworkTreeService {
   NetworkTreeService({
-    String apiUrl = const String.fromEnvironment(
-      'ORBIT_API_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    String apiUrl = apiBaseUrl,
     String? Function()? userId,
     http.Client? client,
   })  : _apiUri = Uri.parse(apiUrl),

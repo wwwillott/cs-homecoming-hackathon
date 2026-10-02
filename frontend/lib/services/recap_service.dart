@@ -64,6 +64,9 @@ class RecapProgress {
 /// Boundary for the voice recap backend.
 abstract class RecapService {
   Stream<RecapProgress> get progress;
+
+  /// Microphone loudness while recording, from 0 (silence) to 1 (loud speech).
+  Stream<double> get inputLevel;
   Future<void> start({required RecapKind kind});
   Future<RecapDraft> stopAndSummarize();
   Future<Contact> commitDraft({required RecapDraft draft, required Contact contact});
@@ -93,6 +96,9 @@ class MockRecapService implements RecapService {
 
   @override
   Stream<RecapProgress> get progress => _progress.stream;
+
+  @override
+  Stream<double> get inputLevel => const Stream.empty();
 
   @override
   Future<void> start({required RecapKind kind}) async {

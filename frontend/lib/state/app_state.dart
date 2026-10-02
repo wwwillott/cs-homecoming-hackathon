@@ -50,8 +50,8 @@ class AppState extends ChangeNotifier {
   late final ContactRepository repository =
       _customRepository ?? LocalContactRepository(userId: () => userId);
   late final NetworkTreeService networkTrees =
-      _customNetworkTrees ?? NetworkTreeService(userId: () => userId);
-  late final RecapService _liveRecap = ApiRecapService(userId: () => userId);
+      _customNetworkTrees ?? NetworkTreeService(userId: () => apiUserId);
+  late final RecapService _liveRecap = ApiRecapService(userId: () => apiUserId);
   late final RecapService _demoRecap = MockRecapService();
   late final ApiAssistantService _liveAssistant = ApiAssistantService(
     networkContext: () {
@@ -95,6 +95,10 @@ class AppState extends ChangeNotifier {
   bool demoMode = false;
   int assistantEpoch = 0;
   String? userId;
+
+  /// The id sent to the API, which only accepts UUIDs. Matches [userId] for server
+  /// accounts; on-device sessions get a stable random one.
+  String? apiUserId;
   String? username;
   UserMode mode = UserMode.seeker;
   ThemeMode themeMode = ThemeMode.system;
@@ -199,6 +203,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _loadUserData(SharedPreferences prefs) async {
+    apiUserId = await _apiUserIdFor(prefs);
     onboarded = prefs.getBool(_pref('onboarded')) ?? false;
     mode = UserMode.fromName(prefs.getString(_pref('mode')));
     userName = prefs.getString(_pref('userName')) ?? '';
@@ -207,6 +212,27 @@ class AppState extends ChangeNotifier {
     university = prefs.getString(_pref('university')) ?? '';
     _setContacts(await repository.loadAll());
     _treeLevelSeen = prefs.getInt(_pref('treeGoalsSeen')) ?? treeLevel;
+  }
+
+  static final _uuidPattern = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  Future<String> _apiUserIdFor(SharedPreferences prefs) async {
+    final id = userId!;
+    if (_uuidPattern.hasMatch(id)) return id;
+    final saved = prefs.getString(_pref('apiUserId'));
+    if (saved != null) return saved;
+    final random = math.Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final generated = '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+    await prefs.setString(_pref('apiUserId'), generated);
+    return generated;
   }
 
   void _setContacts(List<Contact> list) {
@@ -227,13 +253,45 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kSessionUserId, session.userId);
     await prefs.setString(_kSessionUsername, session.username);
+    await _adoptOfflineData(prefs, session);
     await _loadUserData(prefs);
     await refreshTrees();
     notifyListeners();
   }
 
+  /// Moves data saved under an on-device `local-<username>` session to the server account
+  /// the first time that username signs in online.
+  Future<void> _adoptOfflineData(SharedPreferences prefs, AuthSession session) async {
+    final from = 'local-${session.username.toLowerCase()}';
+    final to = session.userId;
+    if (from == to) return;
+    final moves = {
+      for (final key in prefs.getKeys())
+        if (key.startsWith('orbit.$from.')) key: 'orbit.$to.${key.substring('orbit.$from.'.length)}',
+      'orbit.contacts.$from': 'orbit.contacts.$to',
+    };
+    for (final MapEntry(key: oldKey, value: newKey) in moves.entries) {
+      final value = prefs.get(oldKey);
+      if (value == null || prefs.containsKey(newKey)) continue;
+      switch (value) {
+        case String v:
+          await prefs.setString(newKey, v);
+        case bool v:
+          await prefs.setBool(newKey, v);
+        case int v:
+          await prefs.setInt(newKey, v);
+        case double v:
+          await prefs.setDouble(newKey, v);
+        case List v:
+          await prefs.setStringList(newKey, v.cast<String>());
+      }
+      await prefs.remove(oldKey);
+    }
+  }
+
   Future<void> signOut() async {
     userId = null;
+    apiUserId = null;
     username = null;
     onboarded = false;
     userName = '';

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'api_config.dart';
+
 class AuthSession {
   const AuthSession({required this.userId, required this.username});
 
@@ -12,10 +14,7 @@ class AuthSession {
 /// Simple username/password auth against the Orbit API.
 class AuthService {
   AuthService({
-    String apiUrl = const String.fromEnvironment(
-      'ORBIT_API_URL',
-      defaultValue: 'http://127.0.0.1:8000',
-    ),
+    String apiUrl = apiBaseUrl,
     http.Client? client,
   })  : _apiUri = Uri.parse(apiUrl),
         _client = client ?? http.Client();
@@ -28,6 +27,15 @@ class AuthService {
     required String password,
   }) =>
       _authenticate('/api/auth/register', username: username, password: password);
+
+  /// Pings the API so a sleeping free-tier host is awake by the time the user signs in.
+  Future<void> wake() async {
+    try {
+      await _client
+          .get(_apiUri.replace(path: '/api/health', query: null, fragment: null))
+          .timeout(const Duration(seconds: 60));
+    } catch (_) {}
+  }
 
   Future<AuthSession> login({
     required String username,
