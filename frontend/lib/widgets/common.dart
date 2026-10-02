@@ -284,14 +284,20 @@ class OrbitLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(size * 0.3),
-      child: Image.asset(
-        'assets/images/spruce_mark.png',
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.medium,
+    // SizedBox alone still expands under CrossAxisAlignment.stretch; Align
+    // with factors keeps the mark square regardless of parent constraints.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.3),
+        child: Image.asset(
+          'assets/images/spruce_mark.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+        ),
       ),
     );
   }

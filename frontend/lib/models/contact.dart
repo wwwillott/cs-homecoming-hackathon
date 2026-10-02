@@ -259,7 +259,7 @@ class Contact {
       metAt: json['metAt'] as String? ?? '',
       metOn: date('metOn'),
       introducedById: json['introducedById'] as String?,
-      strength: ((json['strength'] as num?)?.round() ?? 5).clamp(1, 10),
+      strength: _readStrength(json['strength']),
       category: ContactCategory.fromName(json['category'] as String?),
       tags: strings('tags'),
       notes: json['notes'] as String? ?? '',
@@ -280,5 +280,15 @@ class Contact {
       createdAt: date('createdAt'),
       readOnly: json['readOnly'] as bool? ?? false,
     );
+  }
+
+  static int _readStrength(Object? value) {
+    num? parsed;
+    if (value is num) {
+      parsed = value;
+    } else if (value is String) {
+      parsed = num.tryParse(value);
+    }
+    return (parsed?.round() ?? 5).clamp(1, 10);
   }
 }

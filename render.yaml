@@ -1,0 +1,29 @@
+# $0 API stack: Render free web service + Neon free Postgres
+# https://dashboard.render.com/select-repo?type=blueprint
+
+services:
+  - type: web
+    name: spruce-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./transcription-poc/backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: CORS_ORIGINS
+        value: https://spruce.my,https://www.spruce.my
+      - key: CORS_ORIGIN_REGEX
+        value: https://(www\.)?spruce\.my
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
+      - key: GOOGLE_CLOUD_LOCATION
+        value: global
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false

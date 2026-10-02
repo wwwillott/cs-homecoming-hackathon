@@ -39,10 +39,11 @@ class GraphNode {
 }
 
 class GraphEdge {
-  GraphEdge(this.a, this.b, {required this.toYou});
+  GraphEdge(this.a, this.b, {required this.toYou, this.bridge = false});
   final GraphNode a;
   final GraphNode b;
   final bool toYou;
+  final bool bridge;
 }
 
 class _GraphModel extends ChangeNotifier {
@@ -61,9 +62,12 @@ class GraphView extends StatefulWidget {
     this.controller,
     this.fitPadding = const EdgeInsets.all(48),
     this.anchorLabel = 'You',
+    this.attachedContacts = const [],
+    this.attachedAnchorLabel = 'Them',
   });
 
   final List<Contact> contacts;
+  final List<Contact> attachedContacts;
   final ColorBy colorBy;
   final SizeBy sizeBy;
   final bool showPeerLinks;
@@ -72,6 +76,7 @@ class GraphView extends StatefulWidget {
   final GraphViewController? controller;
   final EdgeInsets fitPadding;
   final String anchorLabel;
+  final String attachedAnchorLabel;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -79,12 +84,15 @@ class GraphView extends StatefulWidget {
 
 class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMixin {
   static const youId = '__you__';
+  static const themId = '__them__';
   static const _youRadius = 24.0;
+  static const _bridgeLength = 520.0;
 
   final _model = _GraphModel();
   late final Ticker _ticker = createTicker(_onTick);
   final List<GraphNode> _nodes = [];
   final Map<String, GraphNode> _byId = {};
+  final Map<String, String> _anchorOf = {};
   List<GraphEdge> _edges = [];
   Set<String> _focusSet = {};
 
@@ -104,11 +112,16 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
   Offset _downPos = Offset.zero;
   String _signature = '';
 
+  bool get _shared => widget.attachedContacts.isNotEmpty;
+
+  Offset get _youOrigin => _shared ? const Offset(-_bridgeLength / 2, 0) : Offset.zero;
+  Offset get _themOrigin => const Offset(_bridgeLength / 2, 0);
+
   @override
   void initState() {
     super.initState();
     widget.controller?._state = this;
-    final you = GraphNode(youId, null, Offset.zero)
+    final you = GraphNode(youId, null, _youOrigin)
       ..targetRadius = _youRadius
       ..radius = 0;
     _nodes.add(you);
@@ -124,11 +137,13 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
       widget.controller?._state = this;
     }
     if (!identical(old.contacts, widget.contacts) ||
+        !identical(old.attachedContacts, widget.attachedContacts) ||
         old.colorBy != widget.colorBy ||
         old.sizeBy != widget.sizeBy ||
         old.showPeerLinks != widget.showPeerLinks ||
         old.focusId != widget.focusId ||
-        old.anchorLabel != widget.anchorLabel) {
+        old.anchorLabel != widget.anchorLabel ||
+        old.attachedAnchorLabel != widget.attachedAnchorLabel) {
       _sync();
     }
   }
@@ -143,7 +158,7 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
 
   double _restLength(int strength) => 62 + (10 - strength) * 25 + _youRadius;
 
-  Offset _seedPosition(Contact c) {
+  Offset _seedPosition(Contact c, Offset origin) {
     var h = 0;
     for (final u in c.id.codeUnits) {
       h = (h * 131 + u) & 0x7fffffff;
@@ -153,53 +168,98 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     if (intro != null && !intro.isYou) {
       return intro.pos + Offset(math.cos(angle), math.sin(angle)) * 40;
     }
-    return Offset(math.cos(angle), math.sin(angle)) * _restLength(c.strength);
+    return origin + Offset(math.cos(angle), math.sin(angle)) * _restLength(c.strength);
+  }
+
+  void _ensureThemAnchor() {
+    if (!_shared) {
+      _nodes.removeWhere((n) => n.id == themId);
+      _byId.remove(themId);
+      return;
+    }
+    final existing = _byId[themId];
+    if (existing != null) {
+      existing.pos = _themOrigin;
+      return;
+    }
+    final them = GraphNode(themId, null, _themOrigin)
+      ..targetRadius = _youRadius
+      ..radius = 0
+      ..color = AppColors.freshLeaf
+      ..targetColor = AppColors.freshLeaf;
+    _nodes.add(them);
+    _byId[themId] = them;
   }
 
   void _sync({bool initial = false}) {
-    final styler = GraphStyler(
+    _ensureThemAnchor();
+    final you = _byId[youId]!;
+    you.pos = _youOrigin;
+
+    final primaryStyler = GraphStyler(
       contacts: widget.contacts,
       colorBy: widget.colorBy,
       sizeBy: widget.sizeBy,
     );
+    final attachedStyler = GraphStyler(
+      contacts: widget.attachedContacts,
+      colorBy: widget.colorBy,
+      sizeBy: widget.sizeBy,
+    );
 
-    final ids = <String>{youId};
-    for (final c in widget.contacts) {
+    final ids = <String>{youId, if (_shared) themId};
+    _anchorOf.clear();
+
+    void upsert(Contact c, Offset origin, String anchorId, GraphStyler styler) {
       ids.add(c.id);
+      _anchorOf[c.id] = anchorId;
       final node = _byId[c.id];
       if (node == null) {
-        final n = GraphNode(c.id, c, _seedPosition(c));
+        final n = GraphNode(c.id, c, _seedPosition(c, origin));
         _nodes.add(n);
         _byId[c.id] = n;
       } else {
         node.contact = c;
       }
-    }
-    _nodes.removeWhere((n) => !ids.contains(n.id));
-    _byId.removeWhere((k, _) => !ids.contains(k));
-
-    for (final n in _nodes) {
-      final c = n.contact;
-      if (c == null) continue;
+      final n = _byId[c.id]!;
       n.targetColor = styler.colorFor(c);
       n.targetRadius = styler.radiusFor(c);
       if (initial) n.color = n.targetColor;
     }
 
-    final you = _byId[youId]!;
+    for (final c in widget.contacts) {
+      upsert(c, _youOrigin, youId, primaryStyler);
+    }
+    for (final c in widget.attachedContacts) {
+      upsert(c, _themOrigin, themId, attachedStyler);
+    }
+
+    _nodes.removeWhere((n) => !ids.contains(n.id));
+    _byId.removeWhere((k, _) => !ids.contains(k));
+
     _edges = [
       for (final n in _nodes)
-        if (!n.isYou) GraphEdge(you, n, toYou: true),
-      if (widget.showPeerLinks)
-        for (final (a, b) in styler.edges) GraphEdge(_byId[a]!, _byId[b]!, toYou: false),
+        if (!n.isYou)
+          GraphEdge(_byId[_anchorOf[n.id]!]!, n, toYou: true),
+      if (widget.showPeerLinks) ...[
+        for (final (a, b) in primaryStyler.edges)
+          if (_byId.containsKey(a) && _byId.containsKey(b))
+            GraphEdge(_byId[a]!, _byId[b]!, toYou: false),
+        for (final (a, b) in attachedStyler.edges)
+          if (_byId.containsKey(a) && _byId.containsKey(b))
+            GraphEdge(_byId[a]!, _byId[b]!, toYou: false),
+      ],
+      if (_shared) GraphEdge(you, _byId[themId]!, toYou: false, bridge: true),
     ];
 
     final focus = widget.focusId;
     if (focus != null && _byId.containsKey(focus)) {
-      _focusSet = {focus, youId};
-      for (final (a, b) in styler.edges) {
-        if (a == focus) _focusSet.add(b);
-        if (b == focus) _focusSet.add(a);
+      final anchorId = _anchorOf[focus] ?? youId;
+      _focusSet = {focus, anchorId};
+      for (final e in _edges) {
+        if (e.bridge) continue;
+        if (e.a.id == focus) _focusSet.add(e.b.id);
+        if (e.b.id == focus) _focusSet.add(e.a.id);
       }
     } else {
       _focusSet = {};
@@ -210,7 +270,8 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
 
     final signature = [
       for (final n in _nodes) '${n.id}:${n.contact?.strength}:${n.targetRadius.round()}',
-      for (final e in _edges) '${e.a.id}-${e.b.id}',
+      for (final e in _edges) '${e.a.id}-${e.b.id}:${e.bridge}',
+      'shared=$_shared',
     ].join(',');
     if (signature != _signature) {
       _signature = signature;
@@ -273,7 +334,10 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
       final d = math.max(math.sqrt(dx * dx + dy * dy), 0.01);
       final double rest;
       final double k;
-      if (e.toYou) {
+      if (e.bridge) {
+        rest = _bridgeLength;
+        k = 0.12;
+      } else if (e.toYou) {
         rest = _restLength(e.b.contact!.strength);
         k = 0.04;
       } else {
@@ -292,7 +356,7 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     for (var i = 0; i < n; i++) {
       final node = _nodes[i];
       if (node.isYou) {
-        node.pos = Offset.zero;
+        node.pos = node.id == themId ? _themOrigin : _youOrigin;
         node.vel = Offset.zero;
         continue;
       }
@@ -300,8 +364,9 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
         node.vel = Offset.zero;
         continue;
       }
-      fx[i] -= node.pos.dx * 0.002;
-      fy[i] -= node.pos.dy * 0.002;
+      final origin = _byId[_anchorOf[node.id] ?? youId]?.pos ?? Offset.zero;
+      fx[i] -= (node.pos.dx - origin.dx) * 0.002;
+      fy[i] -= (node.pos.dy - origin.dy) * 0.002;
       var v = (node.vel + Offset(fx[i], fy[i]) * _alpha) * 0.6;
       final speed = v.distance;
       if (speed > 30) v = v / speed * 30;
@@ -628,15 +693,20 @@ class _GraphPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1 / scale
       ..color = oc.border.withValues(alpha: dark ? 0.7 : 0.9);
-    for (final s in [9, 6, 3]) {
-      canvas.drawCircle(Offset.zero, state._restLength(s), ringPaint);
+    for (final origin in [
+      state._youOrigin,
+      if (state._shared) state._themOrigin,
+    ]) {
+      for (final s in [9, 6, 3]) {
+        canvas.drawCircle(origin, state._restLength(s), ringPaint);
+      }
     }
 
     final edgePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     for (final e in state._edges) {
-      if (e.toYou) continue;
+      if (e.toYou || e.bridge) continue;
       final em = math.min(e.a.emphasis, e.b.emphasis);
       final appear = _appear(e.a) * _appear(e.b);
       final highlighted = focusing && em > 0.5;
@@ -645,6 +715,24 @@ class _GraphPainter extends CustomPainter {
         ..color = (highlighted ? primary : oc.muted)
             .withValues(alpha: (highlighted ? 0.7 : (dark ? 0.32 : 0.28)) * em * appear);
       _dashedLine(canvas, e.a.pos, e.b.pos, edgePaint, 5 / scale, 4 / scale);
+    }
+    for (final e in state._edges) {
+      if (!e.bridge) continue;
+      final appear = _appear(e.a) * _appear(e.b);
+      final start = e.a.pos + Offset(e.a.radius + 2, 0);
+      final end = e.b.pos - Offset(e.b.radius + 2, 0);
+      edgePaint
+        ..strokeWidth = 7
+        ..shader = ui.Gradient.linear(start, end, [
+          primary.withValues(alpha: 0.55 * appear),
+          AppColors.freshLeaf.withValues(alpha: 0.7 * appear),
+        ]);
+      canvas.drawLine(start, end, edgePaint);
+      edgePaint
+        ..shader = null
+        ..strokeWidth = 2.4
+        ..color = oc.graphBackground.withValues(alpha: 0.35 * appear);
+      canvas.drawLine(start, end, edgePaint);
     }
     for (final e in state._edges) {
       if (!e.toYou) continue;
@@ -753,11 +841,15 @@ class _GraphPainter extends CustomPainter {
     final em = n.emphasis;
 
     if (n.isYou) {
+      final isThem = n.id == _GraphViewState.themId;
+      final brand = isThem
+          ? [AppColors.freshLeaf, AppColors.spruce]
+          : AppColors.brand;
       canvas.drawCircle(
         n.pos,
         r + 10,
         Paint()
-          ..color = primary.withValues(alpha: 0.28)
+          ..color = (isThem ? AppColors.freshLeaf : primary).withValues(alpha: 0.28)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
       );
       canvas.drawCircle(
@@ -767,7 +859,7 @@ class _GraphPainter extends CustomPainter {
           ..shader = ui.Gradient.linear(
             n.pos - Offset(r, r),
             n.pos + Offset(r, r),
-            AppColors.brand,
+            brand,
           ),
       );
       canvas.drawCircle(
@@ -778,12 +870,20 @@ class _GraphPainter extends CustomPainter {
           ..strokeWidth = 3
           ..color = oc.graphBackground,
       );
-      final raw = state.widget.anchorLabel.trim();
-      final label = raw.isEmpty ? 'You' : raw;
+      final raw = isThem
+          ? state.widget.attachedAnchorLabel.trim()
+          : state.widget.anchorLabel.trim();
+      final label = raw.isEmpty ? (isThem ? 'Them' : 'You') : raw;
+      final short = label.length <= 12 ? label : '${label.substring(0, 11)}…';
       final tp = _text(
-        'you-$label',
-        label.length <= 10 ? label : '${label.substring(0, 9)}...',
-        const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+        'anchor-$short',
+        short,
+        TextStyle(
+          fontFamily: 'Inter',
+          fontSize: short.length > 8 ? 11 : 13,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       );
       tp.paint(canvas, n.pos - Offset(tp.width / 2, tp.height / 2));
       return;

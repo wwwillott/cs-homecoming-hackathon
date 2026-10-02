@@ -63,7 +63,12 @@ class _GrowScreenState extends State<GrowScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Nourish your Network', style: context.tt.headlineSmall),
+                                      Text(
+                                        'Nourish your Network',
+                                        style: context.tt.headlineSmall,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                       const SizedBox(height: 4),
                                       Text(
                                         recruiter
@@ -364,13 +369,22 @@ class _Mark extends StatelessWidget {
 
 /// Collapsed chat bar that expands into a full assistant panel.
 class AssistantDock extends StatefulWidget {
-  const AssistantDock({super.key, required this.maxWidth, required this.panelHeight});
+  const AssistantDock({
+    super.key,
+    required this.maxWidth,
+    required this.panelHeight,
+    this.collapsedStyle = AssistantCollapsedStyle.bar,
+  });
+
   final double maxWidth;
   final double panelHeight;
+  final AssistantCollapsedStyle collapsedStyle;
 
   @override
   State<AssistantDock> createState() => _AssistantDockState();
 }
+
+enum AssistantCollapsedStyle { bar, fab }
 
 class _AssistantDockState extends State<AssistantDock> {
   final _input = TextEditingController();
@@ -552,19 +566,33 @@ class _AssistantDockState extends State<AssistantDock> {
     }
     final oc = context.oc;
     const collapsedHeight = 58.0;
-    final width = math.min(widget.maxWidth - 24, open ? 760.0 : 600.0);
+    const fabSize = 56.0;
+    final fab = widget.collapsedStyle == AssistantCollapsedStyle.fab;
+    final width = open
+        ? math.min(widget.maxWidth - 24, 760.0)
+        : (fab ? fabSize : math.min(widget.maxWidth - 24, 600.0));
+    final height = open ? widget.panelHeight : (fab ? fabSize : collapsedHeight);
 
     return Center(
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
         width: width,
-        height: open ? widget.panelHeight : collapsedHeight,
+        height: height,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: oc.surface,
-          borderRadius: BorderRadius.circular(open ? 24 : collapsedHeight / 2),
-          border: Border.all(color: open ? oc.border : AppColors.ai.withValues(alpha: 0.35), width: 1.2),
+          color: fab && !open ? null : oc.surface,
+          gradient: fab && !open
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: AppColors.brand,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(open ? 24 : (fab ? fabSize / 2 : collapsedHeight / 2)),
+          border: fab && !open
+              ? null
+              : Border.all(color: open ? oc.border : AppColors.ai.withValues(alpha: 0.35), width: 1.2),
           boxShadow: [
             BoxShadow(
               color: (open ? Colors.black : AppColors.ai).withValues(alpha: context.isDark ? 0.4 : 0.16),
@@ -587,7 +615,9 @@ class _AssistantDockState extends State<AssistantDock> {
                   maxHeight: widget.panelHeight,
                   child: _panel(context),
                 )
-              : _CollapsedBar(key: const ValueKey('closed'), onTap: _expand),
+              : fab
+                  ? _CollapsedFab(key: const ValueKey('fab'), onTap: _expand)
+                  : _CollapsedBar(key: const ValueKey('closed'), onTap: _expand),
         ),
       ),
     );
@@ -749,6 +779,28 @@ class _AssistantDockState extends State<AssistantDock> {
           child: _Bubble(message: m, typing: pending && m.text.isEmpty),
         );
       },
+    );
+  }
+}
+
+class _CollapsedFab extends StatelessWidget {
+  const _CollapsedFab({super.key, required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Tooltip(
+        message: 'Ask Spruce',
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const SizedBox.expand(
+            child: Icon(Icons.auto_awesome, color: AppColors.mistCream, size: 24),
+          ),
+        ),
+      ),
     );
   }
 }

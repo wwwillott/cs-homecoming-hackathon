@@ -19,10 +19,18 @@ class _Dest {
   final String? shortLabel;
 }
 
+String treeTitleFor(AppState app) {
+  final name = (app.username?.trim().isNotEmpty ?? false)
+      ? app.username!.trim()
+      : (app.userName.trim().isNotEmpty ? app.userName.trim() : '');
+  if (name.isEmpty) return 'Your tree';
+  return "$name's tree";
+}
+
 const _destinations = [
   _Dest(AppTab.home, 'Home', Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
   _Dest(AppTab.people, 'People', Icons.people_alt_outlined, Icons.people_alt_rounded),
-  _Dest(AppTab.network, 'Your Tree', Icons.hub_outlined, Icons.hub_rounded, 'Tree'),
+  _Dest(AppTab.network, 'Tree', Icons.park_outlined, Icons.park_rounded, 'Tree'),
   _Dest(AppTab.grow, 'Nourish your Network', Icons.park_outlined, Icons.park_rounded, 'Nourish'),
 ];
 
@@ -117,6 +125,8 @@ class _SharedModeChip extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Shared with $label · attached tree is read-only',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: context.tt.labelLarge?.copyWith(color: context.oc.ink),
                 ),
               ),
@@ -249,7 +259,9 @@ class _SideNav extends StatelessWidget {
               const SizedBox(height: 24),
               for (final d in _destinations)
                 _NavItem(
-                  dest: d,
+                  dest: d.tab == AppTab.network
+                      ? _Dest(d.tab, treeTitleFor(app), d.icon, d.selectedIcon, d.shortLabel)
+                      : d,
                   extended: extended,
                   selected: app.tab == d.tab,
                   onTap: () => app.setTab(d.tab),
@@ -447,12 +459,16 @@ class _NavItem extends StatelessWidget {
           ),
           if (extended) ...[
             const SizedBox(width: 14),
-            Text(
-              dest.label,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? oc.ink : oc.muted,
-                fontSize: 14.5,
+            Expanded(
+              child: Text(
+                dest.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? oc.ink : oc.muted,
+                  fontSize: 14.5,
+                ),
               ),
             ),
           ],
