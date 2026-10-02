@@ -7,7 +7,9 @@ import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/contact.dart';
+import 'mic_permission.dart';
 import 'recap_service.dart';
+
 
 class ApiRecapService implements RecapService {
   ApiRecapService({
@@ -74,12 +76,16 @@ class ApiRecapService implements RecapService {
 
   @override
   Future<void> start({required RecapKind kind}) async {
-    await cancel();
-    if (!await _recorder.hasPermission()) {
+    // Request mic before any other awaits so Chrome still treats this as a
+    // user gesture and shows the permission prompt.
+    if (!await ensureMicrophonePermission()) {
       throw StateError(
-        'Microphone permission is required to record a conversation.',
+        'Microphone access is blocked. Click the lock icon next to the URL, '
+        'set Microphone to Allow, reload, and try again. '
+        'If you opened /phone.html, use spruce.my instead.',
       );
     }
+    await cancel();
     _kind = kind;
     _active = true;
     _stopping = false;
