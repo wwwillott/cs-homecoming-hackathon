@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import '../models/contact.dart';
@@ -18,6 +19,7 @@ class RecapDraft {
     required this.contact,
     required this.aiFields,
     required this.transcript,
+    this.sessionId,
   });
 
   final Contact contact;
@@ -25,6 +27,7 @@ class RecapDraft {
   /// Names of [Contact] JSON fields that were filled in by the summarizer.
   final Set<String> aiFields;
   final String transcript;
+  final String? sessionId;
 
   factory RecapDraft.fromJson(Map<String, dynamic> json) {
     final contactJson = Map<String, dynamic>.from(json['contact'] as Map);
@@ -39,12 +42,34 @@ class RecapDraft {
               if (e.key != 'id' && filled(e.value)) e.key,
           },
       transcript: json['transcript'] as String? ?? '',
+      sessionId: json['sessionId'] as String?,
     );
   }
 }
 
+class RecapProgress {
+  const RecapProgress({
+    this.committedTranscript = '',
+    this.interimTranscript = '',
+    this.message,
+    this.hasGap = false,
+  });
+
+  final String committedTranscript;
+  final String interimTranscript;
+  final String? message;
+  final bool hasGap;
+}
+
 /// Boundary for the voice recap backend.
 abstract class RecapService {
+  Stream<RecapProgress> get progress;
+  Future<void> start({required RecapKind kind});
+  Future<RecapDraft> stopAndSummarize();
+  Future<Contact> commitDraft({required RecapDraft draft, required Contact contact});
+  Future<void> cancel();
+  Future<void> dispose();
+
   Future<RecapDraft> summarize({
     required Uint8List audio,
     required String mimeType,
@@ -63,6 +88,33 @@ class MockRecapService implements RecapService {
       'just did the Wasatch 100 as a pacer. Her email is jasmine.ortiz@recursion.example. '
       'Priya introduced us. I should send her my resume and the hackathon demo by Friday. '
       'Honestly one of the best conversations of the night, I\'d say an eight.';
+
+  final _progress = StreamController<RecapProgress>.broadcast();
+
+  @override
+  Stream<RecapProgress> get progress => _progress.stream;
+
+  @override
+  Future<void> start({required RecapKind kind}) async {
+    _progress.add(const RecapProgress(message: 'Mock recording started'));
+  }
+
+  @override
+  Future<RecapDraft> stopAndSummarize() => summarize(
+        audio: Uint8List(0),
+        mimeType: 'audio/webm',
+        kind: RecapKind.recap,
+      );
+
+  @override
+  Future<Contact> commitDraft({required RecapDraft draft, required Contact contact}) async =>
+      contact;
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> dispose() => _progress.close();
 
   @override
   Future<RecapDraft> summarize({

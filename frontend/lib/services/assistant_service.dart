@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
 import '../models/contact.dart';
 import '../models/user_mode.dart';
 
@@ -20,6 +24,48 @@ abstract class AssistantService {
 
   /// Streams the assistant's reply to the last user message in [history].
   Stream<String> reply(List<ChatMessage> history);
+}
+
+class ApiAssistantService implements AssistantService {
+  ApiAssistantService({
+    required this.fallback,
+    String apiUrl = const String.fromEnvironment(
+      'ORBIT_API_URL',
+      defaultValue: 'http://127.0.0.1:8000',
+    ),
+    http.Client? client,
+  })  : _apiUri = Uri.parse(apiUrl),
+        _client = client ?? http.Client();
+
+  final AssistantService fallback;
+  final Uri _apiUri;
+  final http.Client _client;
+
+  @override
+  Future<List<String>> suggestedPrompts() => fallback.suggestedPrompts();
+
+  @override
+  Stream<String> reply(List<ChatMessage> history) async* {
+    final question = history.lastWhere((message) => message.role == ChatRole.user).text;
+    try {
+      final response = await _client.post(
+        _apiUri.replace(path: '/api/network/ask', query: null, fragment: null),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'question': question}),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        final citations = body['citations'] as List? ?? const [];
+        if (citations.isNotEmpty) {
+          yield body['answer'] as String? ?? '';
+          return;
+        }
+      }
+    } catch (_) {
+      // Keep the local assistant available while the backend is offline.
+    }
+    yield* fallback.reply(history);
+  }
 }
 
 /// Stand-in used until the backend endpoint is wired up. Answers from the
@@ -87,7 +133,9 @@ class MockAssistantService implements AssistantService {
     if (named != null) return _aboutPerson(list, named, q);
 
     for (final company in list.map((c) => c.company).where((c) => c.isNotEmpty).toSet()) {
-      if (q.contains(company.toLowerCase())) return _aboutCompany(list, company);
+      if (q.contains(company.toLowerCase())) {
+        return _aboutCompany(list, company);
+      }
     }
     for (final event in list.map((c) => c.metAt).where((e) => e.isNotEmpty).toSet()) {
       if (q.contains(event.toLowerCase())) return _aboutEvent(list, event);
@@ -139,7 +187,9 @@ class MockAssistantService implements AssistantService {
   String _candidates(List<Contact> list) {
     final people = list.where((c) => c.category == ContactCategory.candidate).toList()
       ..sort((a, b) => b.strength.compareTo(a.strength));
-    if (people.isEmpty) return 'No one is marked as a Candidate yet. Set their relationship to Candidate and they\'ll show up here.';
+    if (people.isEmpty) {
+      return 'No one is marked as a Candidate yet. Set their relationship to Candidate and they\'ll show up here.';
+    }
     final lines = people.take(5).map((p) => '• ${p.name}, ${p.roleLine} (${p.strength}/10)').join('\n');
     return 'Your strongest candidates right now:\n\n$lines';
   }
@@ -180,7 +230,9 @@ class MockAssistantService implements AssistantService {
   List<Contact> _neighbors(List<Contact> list, Contact c) {
     final ids = <String>{...c.connectedIds, ?c.introducedById};
     for (final o in list) {
-      if (o.connectedIds.contains(c.id) || o.introducedById == c.id) ids.add(o.id);
+      if (o.connectedIds.contains(c.id) || o.introducedById == c.id) {
+        ids.add(o.id);
+      }
     }
     ids.remove(c.id);
     return list.where((o) => ids.contains(o.id)).toList();
