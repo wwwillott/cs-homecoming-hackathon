@@ -77,6 +77,7 @@ class MockAssistantService implements AssistantService {
   String _answer(String question) {
     final q = question.toLowerCase();
     final list = contacts();
+    if (RegExp(r'\bapps?\b').hasMatch(q)) return _apps(list);
     if (list.isEmpty) {
       return 'Your network is empty right now, so start with places where conversations happen naturally. '
           'Look for a meetup or hackathon on Luma, Meetup, or Devpost this week, and record a quick recap after each conversation. '
@@ -154,6 +155,29 @@ class MockAssistantService implements AssistantService {
     return 'Your best places to meet people so far:\n\n$lines\n\n'
         'Look for more events like these on Luma and Meetup, and check Devpost for hackathons. '
         'They\'re where most of your strongest ties came from.';
+  }
+
+  String _apps(List<Contact> list) {
+    final event = _top(list.map((c) => c.metAt));
+    final source = event == null
+        ? ''
+        : 'A lot of your strongest connections came from $event, so look for similar events first.\n\n';
+    if (mode() == UserMode.recruiter) {
+      return '${source}Here\'s where I\'d spend your time to find strong candidates:\n\n'
+          '• Devpost and Major League Hacking: sponsor or judge a hackathon to see how people actually build.\n'
+          '• Handshake: host an info session and message students who match your roles.\n'
+          '• Luma: host a small technical meetup so the right people come to you.\n'
+          '• GitHub: find engineers through the projects they contribute to.\n'
+          '• LinkedIn: search second-degree connections before reaching out cold.\n\n'
+          'Pick one event channel and one community and show up consistently for a month.';
+    }
+    return '${source}Here\'s where I\'d start:\n\n'
+        '• Luma: follow a few local tech calendars. The same people keep showing up, which makes a second hello easy.\n'
+        '• Meetup: pick one group and go three times. Regulars become real connections.\n'
+        '• Devpost: a hackathon lets you work alongside people and meet sponsors.\n'
+        '• Discord: join a community you care about and answer questions. Helping is the best intro.\n'
+        '• LinkedIn: connect within a day of meeting someone, with a note about where you met.\n\n'
+        'Start with one events app and one community, and record a quick recap in Orbit after each conversation.';
   }
 
   String _overview(List<Contact> list) {

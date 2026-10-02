@@ -102,7 +102,7 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0B0E1A), Color(0xFF15123A), Color(0xFF2A1243)],
+          colors: [Color(0xFF070D09), Color(0xFF0E2215), Color(0xFF173A22)],
         ),
       ),
       child: Stack(
@@ -227,14 +227,14 @@ class _OrbitArtPainter extends CustomPainter {
       center,
       base * 0.42,
       Paint()
-        ..color = const Color(0xFF7C6CF7).withValues(alpha: 0.5)
+        ..color = AppColors.freshLeaf.withValues(alpha: 0.45)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26),
     );
     canvas.drawCircle(
       center,
       base * 0.3,
       Paint()
-        ..shader = const LinearGradient(colors: [Color(0xFF6D6DF7), Color(0xFFB146E0)])
+        ..shader = const LinearGradient(colors: [AppColors.freshLeaf, AppColors.spruce])
             .createShader(Rect.fromCircle(center: center, radius: base * 0.3)),
     );
   }

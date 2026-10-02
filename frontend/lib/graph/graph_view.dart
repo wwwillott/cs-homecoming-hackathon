@@ -764,7 +764,7 @@ class _GraphPainter extends CustomPainter {
           ..shader = ui.Gradient.linear(
             n.pos - Offset(r, r),
             n.pos + Offset(r, r),
-            const [Color(0xFF6D6DF7), Color(0xFFB146E0)],
+            AppColors.brand,
           ),
       );
       canvas.drawCircle(

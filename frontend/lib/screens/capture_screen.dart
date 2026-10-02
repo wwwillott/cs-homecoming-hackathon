@@ -149,13 +149,13 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
       data: _captureTheme,
       child: Builder(builder: (context) {
         return Scaffold(
-          backgroundColor: const Color(0xFF0A0C16),
+          backgroundColor: const Color(0xFF080C09),
           body: Container(
             decoration: const BoxDecoration(
               gradient: RadialGradient(
                 center: Alignment(0, -0.2),
                 radius: 1.2,
-                colors: [Color(0xFF221A55), Color(0xFF0E0F22), Color(0xFF0A0C16)],
+                colors: [Color(0xFF173F24), Color(0xFF0C1910), Color(0xFF080C09)],
               ),
             ),
             child: SafeArea(
@@ -350,11 +350,11 @@ class _MicButton extends StatelessWidget {
                     end: Alignment.bottomRight,
                     colors: recording
                         ? const [Color(0xFFFB7185), Color(0xFFE11D48)]
-                        : const [Color(0xFF7C7CFF), Color(0xFFB146E0)],
+                        : const [AppColors.freshLeaf, AppColors.spruce],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: (recording ? AppColors.rose : AppColors.primary).withValues(alpha: 0.5),
+                      color: (recording ? AppColors.rose : AppColors.freshLeaf).withValues(alpha: 0.4),
                       blurRadius: 40,
                       spreadRadius: 2,
                     ),
@@ -420,7 +420,7 @@ class _WavePainter extends CustomPainter {
       final h = math.max(4.0, values[i] * size.height);
       final x = i * (barW + gap);
       final t = i / (n - 1);
-      final color = Color.lerp(const Color(0xFF7C7CFF), const Color(0xFFE879F9), t)!;
+      final color = Color.lerp(AppColors.spruce, AppColors.freshLeaf, t)!;
       final fade = math.min(1.0, math.min(t, 1 - t) * 6);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -511,7 +511,7 @@ class _Tips extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(t.$1, size: 17, color: const Color(0xFFA5A6FF)),
+                  Icon(t.$1, size: 17, color: AppColors.freshLeaf),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -550,7 +550,7 @@ class _Processing extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.auto_awesome, color: Color(0xFFC4B5FD)),
+                const Icon(Icons.auto_awesome, color: AppColors.freshLeaf),
                 const SizedBox(width: 10),
                 Text('Summarizing your recap', style: context.tt.titleMedium?.copyWith(color: Colors.white)),
               ],
@@ -567,12 +567,12 @@ class _Processing extends StatelessWidget {
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 250),
                         child: i < step
-                            ? const Icon(Icons.check_circle_rounded, key: ValueKey('done'), color: Color(0xFF34D399), size: 22)
+                            ? const Icon(Icons.check_circle_rounded, key: ValueKey('done'), color: AppColors.freshLeaf, size: 22)
                             : i == step
                                 ? const Padding(
                                     key: ValueKey('busy'),
                                     padding: EdgeInsets.all(3),
-                                    child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xFFA5A6FF)),
+                                    child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.freshLeaf),
                                   )
                                 : Icon(
                                     Icons.circle_outlined,

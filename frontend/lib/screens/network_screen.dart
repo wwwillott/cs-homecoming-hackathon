@@ -19,7 +19,7 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   final _graph = GraphViewController();
-  bool? _legendOpen;
+  bool _legendOpen = false;
   String? _lastFocus;
   bool _focusFromTap = false;
 
@@ -40,7 +40,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
     final wide = isSplitLayout(context);
     final narrow = MediaQuery.sizeOf(context).width < Breakpoints.rail;
     final focus = app.byId(app.graphFocusId);
-    final legendOpen = _legendOpen ?? !narrow;
+    final legendOpen = _legendOpen;
 
     if (app.graphFocusId != _lastFocus) {
       final id = app.graphFocusId;
@@ -93,26 +93,50 @@ class _NetworkScreenState extends State<NetworkScreen> {
             ),
           ),
         ),
-        if (!narrow)
-          Positioned(
-            right: 20,
-            bottom: 24,
-            child: _ZoomControls(controller: _graph),
-          ),
+        if (!narrow) Positioned(right: 20, bottom: 24, child: _ZoomControls(controller: _graph)),
         Positioned(
           left: narrow ? 14 : 24,
           bottom: narrow ? 14 : 24,
           right: narrow ? 90 : null,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: narrow && focus != null
-                ? const SizedBox.shrink()
-                : _Legend(
-                    key: ValueKey(legendOpen),
-                    styler: styler,
-                    open: legendOpen,
-                    onToggle: () => setState(() => _legendOpen = !legendOpen),
+          child: IgnorePointer(
+            ignoring: narrow && focus != null,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              opacity: narrow && focus != null ? 0 : 1,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) =>
+                        Stack(alignment: Alignment.bottomLeft, children: [...previous, ?current]),
+                    transitionBuilder: (child, a) => FadeTransition(
+                      opacity: a,
+                      child: SizeTransition(
+                        sizeFactor: a,
+                        alignment: Alignment.bottomLeft,
+                        child: ScaleTransition(
+                          scale: Tween(begin: 0.85, end: 1.0).animate(a),
+                          alignment: Alignment.bottomLeft,
+                          child: child,
+                        ),
+                      ),
+                    ),
+                    child: legendOpen
+                        ? Padding(
+                            key: const ValueKey('legend'),
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _Legend(styler: styler),
+                          )
+                        : const SizedBox.shrink(),
                   ),
+                  _LegendButton(open: legendOpen, onTap: () => setState(() => _legendOpen = !legendOpen)),
+                ],
+              ),
+            ),
           ),
         ),
         if (narrow)
@@ -238,11 +262,7 @@ class _TopBar extends StatelessWidget {
         onTap: () => app.setShowPeerLinks(!app.showPeerLinks),
         child: const Icon(Icons.share_outlined, size: 18),
       ),
-      _GlassButton(
-        tooltip: 'Find someone',
-        onTap: onSearch,
-        child: const Icon(Icons.search_rounded, size: 19),
-      ),
+      _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
       if (compact)
         _GlassButton(
           tooltip: 'Fit to screen',
@@ -272,10 +292,7 @@ class _TopBar extends StatelessWidget {
             clipBehavior: Clip.none,
             child: Row(
               children: [
-                for (var i = 0; i < controls.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  controls[i],
-                ],
+                for (var i = 0; i < controls.length; i++) ...[if (i > 0) const SizedBox(width: 8), controls[i]],
               ],
             ),
           ),
@@ -288,12 +305,7 @@ class _TopBar extends StatelessWidget {
       children: [
         title,
         const Spacer(),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.end,
-          children: controls,
-        ),
+        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: controls),
       ],
     );
   }
@@ -310,7 +322,9 @@ class _GlassButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = context.cs.primary;
     final button = Material(
-      color: active ? primary.withValues(alpha: context.isDark ? 0.25 : 0.12) : context.oc.surface.withValues(alpha: 0.92),
+      color: active
+          ? primary.withValues(alpha: context.isDark ? 0.25 : 0.12)
+          : context.oc.surface.withValues(alpha: 0.92),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: active ? primary.withValues(alpha: 0.4) : context.oc.border),
@@ -363,11 +377,7 @@ class _OptionMenu<T> extends StatelessWidget {
       position: PopupMenuPosition.under,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       itemBuilder: (_) => [
-        PopupMenuItem<T>(
-          enabled: false,
-          height: 32,
-          child: Text('$prefix by', style: context.tt.labelSmall),
-        ),
+        PopupMenuItem<T>(enabled: false, height: 32, child: Text('$prefix by', style: context.tt.labelSmall)),
         for (final v in values)
           PopupMenuItem<T>(
             value: v,
@@ -394,7 +404,10 @@ class _OptionMenu<T> extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: oc.muted),
             const SizedBox(width: 8),
-            Text('$prefix: ', style: TextStyle(color: oc.muted, fontWeight: FontWeight.w500, fontSize: 13.5)),
+            Text(
+              '$prefix: ',
+              style: TextStyle(color: oc.muted, fontWeight: FontWeight.w500, fontSize: 13.5),
+            ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: Text(
@@ -422,7 +435,11 @@ class _ZoomControls extends StatelessWidget {
       children: [
         _GlassButton(tooltip: 'Zoom in', onTap: () => controller.zoomBy(1.3), child: const Icon(Icons.add_rounded)),
         const SizedBox(height: 6),
-        _GlassButton(tooltip: 'Zoom out', onTap: () => controller.zoomBy(1 / 1.3), child: const Icon(Icons.remove_rounded)),
+        _GlassButton(
+          tooltip: 'Zoom out',
+          onTap: () => controller.zoomBy(1 / 1.3),
+          child: const Icon(Icons.remove_rounded),
+        ),
         const SizedBox(height: 6),
         _GlassButton(
           tooltip: 'Fit to screen',
@@ -434,116 +451,107 @@ class _ZoomControls extends StatelessWidget {
   }
 }
 
-class _Legend extends StatelessWidget {
-  const _Legend({super.key, required this.styler, required this.open, required this.onToggle});
-  final GraphStyler styler;
+class _LegendButton extends StatelessWidget {
+  const _LegendButton({required this.open, required this.onTap});
   final bool open;
-  final VoidCallback onToggle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
-    if (!open) {
-      return Material(
-        color: oc.surface.withValues(alpha: 0.94),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: oc.border)),
+    final accent = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: open ? 'Hide legend' : 'What do the colors mean?',
+      child: Material(
+        color: open ? accent.withValues(alpha: 0.12) : oc.surface.withValues(alpha: 0.94),
+        shape: CircleBorder(side: BorderSide(color: open ? accent.withValues(alpha: 0.4) : oc.border)),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onToggle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.legend_toggle_rounded, size: 18, color: oc.muted),
-                const SizedBox(width: 8),
-                Text('Legend', style: context.tt.labelLarge),
-              ],
-            ),
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 36,
+            child: Icon(Icons.question_mark_rounded, size: 18, color: open ? accent : oc.muted),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
+class _Legend extends StatelessWidget {
+  const _Legend({required this.styler});
+  final GraphStyler styler;
+
+  @override
+  Widget build(BuildContext context) {
+    final oc = context.oc;
     final entries = styler.legend();
     return Container(
       width: 270,
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: oc.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: oc.border),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.06), blurRadius: 20),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.06), blurRadius: 20)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text('Color: ${styler.colorBy.label}', style: context.tt.titleSmall)),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Hide legend',
-                onPressed: onToggle,
-                icon: Icon(Icons.close_rounded, size: 18, color: oc.muted),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (styler.colorBy == ColorBy.strength)
-                    _GradientScale(
-                      colors: [for (var i = 1; i <= 10; i++) AppColors.strength(i)],
-                      left: '1 · weak',
-                      right: '10 · strongest',
-                    )
-                  else if (styler.colorBy == ColorBy.recency)
-                    _GradientScale(
-                      colors: [for (final d in [0, 7, 14, 30, 45, 80, 120]) AppColors.recency(d)],
-                      left: 'This week',
-                      right: '4+ months',
-                    )
-                  else
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 6,
-                      children: [
-                        for (final e in entries.take(10))
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(color: e.color, shape: BoxShape.circle),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                e.label,
-                                style: TextStyle(fontSize: 12, color: oc.ink, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  const SizedBox(height: 12),
-                  Divider(color: oc.border),
-                  const SizedBox(height: 8),
-                  _LegendLine(icon: Icons.bubble_chart_outlined, text: styler.sizeCaption),
-                  const _LegendLine(icon: Icons.linear_scale_rounded, text: 'Closer, thicker line = stronger tie'),
-                  const _LegendLine(icon: Icons.more_horiz_rounded, text: 'Dashed = they know each other'),
-                ],
-              ),
+          Text('Color: ${styler.colorBy.label}', style: context.tt.titleSmall),
+          const SizedBox(height: 10),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (styler.colorBy == ColorBy.strength)
+                  _GradientScale(
+                    colors: [for (var i = 1; i <= 10; i++) AppColors.strength(i)],
+                    left: '1 · weak',
+                    right: '10 · strongest',
+                  )
+                else if (styler.colorBy == ColorBy.recency)
+                  _GradientScale(
+                    colors: [
+                      for (final d in [0, 7, 14, 30, 45, 80, 120]) AppColors.recency(d),
+                    ],
+                    left: 'This week',
+                    right: '4+ months',
+                  )
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 6,
+                    children: [
+                      for (final e in entries.take(10))
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(color: e.color, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              e.label,
+                              style: TextStyle(fontSize: 12, color: oc.ink, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                Divider(color: oc.border),
+                const SizedBox(height: 8),
+                _LegendLine(icon: Icons.bubble_chart_outlined, text: styler.sizeCaption),
+                const _LegendLine(icon: Icons.linear_scale_rounded, text: 'Closer, thicker line = stronger tie'),
+                const _LegendLine(icon: Icons.more_horiz_rounded, text: 'Dashed = they know each other'),
+              ],
             ),
           ),
         ],
@@ -699,14 +707,17 @@ class _SearchSheetState extends State<_SearchSheet> {
   @override
   Widget build(BuildContext context) {
     final q = _q.toLowerCase();
-    final results = widget.contacts
-        .where((c) =>
-            q.isEmpty ||
-            c.name.toLowerCase().contains(q) ||
-            c.company.toLowerCase().contains(q) ||
-            c.metAt.toLowerCase().contains(q))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final results =
+        widget.contacts
+            .where(
+              (c) =>
+                  q.isEmpty ||
+                  c.name.toLowerCase().contains(q) ||
+                  c.company.toLowerCase().contains(q) ||
+                  c.metAt.toLowerCase().contains(q),
+            )
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SizedBox(

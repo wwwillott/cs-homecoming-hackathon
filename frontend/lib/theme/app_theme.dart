@@ -26,27 +26,27 @@ class OrbitColors extends ThemeExtension<OrbitColors> {
   final Color graphGrid;
 
   static const light = OrbitColors(
-    background: Color(0xFFF5F6FA),
+    background: Color(0xFFF6F7F4),
     surface: Color(0xFFFFFFFF),
-    surfaceHigh: Color(0xFFEEF0F6),
-    border: Color(0xFFE3E6EE),
-    ink: Color(0xFF0E1324),
-    muted: Color(0xFF5B6478),
-    subtle: Color(0xFF98A1B3),
-    graphBackground: Color(0xFFF8F9FC),
-    graphGrid: Color(0xFFE9ECF3),
+    surfaceHigh: Color(0xFFEEF1EA),
+    border: Color(0xFFE2E6DD),
+    ink: Color(0xFF101A13),
+    muted: Color(0xFF5B665D),
+    subtle: Color(0xFF99A39A),
+    graphBackground: Color(0xFFF9FAF7),
+    graphGrid: Color(0xFFEAEEE6),
   );
 
   static const dark = OrbitColors(
-    background: Color(0xFF0A0D16),
-    surface: Color(0xFF121624),
-    surfaceHigh: Color(0xFF1A2033),
-    border: Color(0xFF242B40),
-    ink: Color(0xFFE9ECF5),
-    muted: Color(0xFF9099AF),
-    subtle: Color(0xFF5E6780),
-    graphBackground: Color(0xFF0B0F1A),
-    graphGrid: Color(0xFF151B2B),
+    background: Color(0xFF0A0D0B),
+    surface: Color(0xFF121613),
+    surfaceHigh: Color(0xFF1A201B),
+    border: Color(0xFF252C26),
+    ink: Color(0xFFE9EEE8),
+    muted: Color(0xFF939C94),
+    subtle: Color(0xFF5F6960),
+    graphBackground: Color(0xFF0B0F0C),
+    graphGrid: Color(0xFF161C17),
   );
 
   @override
@@ -78,21 +78,32 @@ extension OrbitThemeX on BuildContext {
 }
 
 class AppColors {
-  static const primary = Color(0xFF5B5BF0);
-  static const primaryDark = Color(0xFF7C7CFF);
-  static const teal = Color(0xFF14B8A6);
-  static const amber = Color(0xFFF59E0B);
-  static const rose = Color(0xFFF43F5E);
-  static const ai = Color(0xFF8B5CF6);
+  static const deepSpruce = Color(0xFF195D30);
+  static const spruce = Color(0xFF2D8634);
+  static const freshLeaf = Color(0xFF74C63C);
+  static const rootBrown = Color(0xFF6E3915);
+  static const mistCream = Color(0xFFF6FDE7);
+
+  static const primary = spruce;
+  static const primaryDark = freshLeaf;
+  static const onPrimaryDark = Color(0xFF0D2614);
+  static const teal = freshLeaf;
+  static const amber = Color(0xFFE0A526);
+  static const rose = Color(0xFFE5484D);
+  static const ai = Color(0xFF50A638);
+
+  /// Main brand gradient, used for the logo, record buttons and the "You" node.
+  static const brand = [spruce, deepSpruce];
+  static const brandWide = [deepSpruce, spruce, freshLeaf];
 
   static const _strengthStops = [
-    Color(0xFFA3AEC2),
-    Color(0xFF38BDF8),
-    Color(0xFF6366F1),
-    Color(0xFFC026D3),
+    Color(0xFFB5A593),
+    freshLeaf,
+    spruce,
+    deepSpruce,
   ];
 
-  /// Sequential scale from weak (slate) to strongest (magenta).
+  /// Sequential scale from weak (bark) to strongest (deep spruce).
   static Color strength(num value) {
     final t = ((value - 1) / 9).clamp(0.0, 1.0) * (_strengthStops.length - 1);
     final i = t.floor().clamp(0, _strengthStops.length - 2);
@@ -108,45 +119,45 @@ class AppColors {
   }
 
   static const category = {
-    ContactCategory.recruiter: Color(0xFF0EA5E9),
-    ContactCategory.mentor: Color(0xFFF59E0B),
-    ContactCategory.engineer: Color(0xFF10B981),
-    ContactCategory.founder: Color(0xFFEF4444),
-    ContactCategory.peer: Color(0xFF8B5CF6),
-    ContactCategory.alumni: Color(0xFF3B82F6),
-    ContactCategory.candidate: Color(0xFFEC4899),
-    ContactCategory.other: Color(0xFF94A3B8),
+    ContactCategory.recruiter: spruce,
+    ContactCategory.mentor: Color(0xFFD4952B),
+    ContactCategory.engineer: Color(0xFF2A7F8F),
+    ContactCategory.founder: Color(0xFFC0563A),
+    ContactCategory.peer: freshLeaf,
+    ContactCategory.alumni: Color(0xFF3F6FA6),
+    ContactCategory.candidate: rootBrown,
+    ContactCategory.other: Color(0xFF97A096),
   };
 
-  static const _hashPalette = [
-    Color(0xFF6366F1),
-    Color(0xFF0EA5E9),
-    Color(0xFF10B981),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
-    Color(0xFF8B5CF6),
-    Color(0xFFEC4899),
-    Color(0xFF14B8A6),
-    Color(0xFFF97316),
-    Color(0xFF84CC16),
+  static const naturePalette = [
+    spruce,
+    Color(0xFFD4952B),
+    Color(0xFF2A7F8F),
+    rootBrown,
+    freshLeaf,
+    Color(0xFFC0563A),
+    deepSpruce,
+    Color(0xFF3F6FA6),
+    Color(0xFFA0703F),
+    Color(0xFF7E9A4A),
   ];
 
   static Color forKey(String key) {
-    if (key.isEmpty) return const Color(0xFF94A3B8);
+    if (key.isEmpty) return const Color(0xFF97A096);
     var h = 0;
     for (final c in key.toLowerCase().codeUnits) {
       h = (h * 31 + c) & 0x7fffffff;
     }
-    return _hashPalette[h % _hashPalette.length];
+    return naturePalette[h % naturePalette.length];
   }
 
-  /// Warm when recently in touch, cold when it has been a while.
+  /// Fresh growth when recently in touch, autumn and bare bark when it has been a while.
   static Color recency(int days) {
     const stops = [
-      (0, Color(0xFFF97316)),
-      (14, Color(0xFFEAB308)),
-      (45, Color(0xFF38BDF8)),
-      (120, Color(0xFF64748B)),
+      (0, freshLeaf),
+      (14, spruce),
+      (45, Color(0xFFD4952B)),
+      (120, Color(0xFF8A7B6C)),
     ];
     if (days <= 0) return stops.first.$2;
     for (var i = 0; i < stops.length - 1; i++) {
@@ -172,7 +183,7 @@ class AppTheme {
       brightness: brightness,
     ).copyWith(
       primary: primary,
-      onPrimary: Colors.white,
+      onPrimary: isDark ? AppColors.onPrimaryDark : Colors.white,
       secondary: AppColors.teal,
       surface: oc.surface,
       onSurface: oc.ink,

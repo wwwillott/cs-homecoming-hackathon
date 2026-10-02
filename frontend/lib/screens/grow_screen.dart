@@ -17,7 +17,7 @@ import 'settings_sheet.dart';
 const _aiGradient = LinearGradient(
   begin: Alignment.topLeft,
   end: Alignment.bottomRight,
-  colors: [Color(0xFF6D6DF7), Color(0xFFB146E0)],
+  colors: AppColors.brand,
 );
 
 class GrowScreen extends StatefulWidget {
@@ -28,17 +28,15 @@ class GrowScreen extends StatefulWidget {
 }
 
 class _GrowScreenState extends State<GrowScreen> {
-  ResourceKind? _kind;
+  ResourceKind _kind = ResourceKind.events;
+  final _dock = GlobalKey<_AssistantDockState>();
 
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final recruiter = app.mode == UserMode.recruiter;
     final showSettings = MediaQuery.sizeOf(context).width < Breakpoints.rail;
-    final resources = growthResources.where((r) => _kind == null || r.kind == _kind).toList();
-    if (recruiter) {
-      resources.sort((a, b) => (a.recruiterTip == null ? 1 : 0).compareTo(b.recruiterTip == null ? 1 : 0));
-    }
+    final resources = growthResources.where((r) => r.kind == _kind).toList();
 
     return LayoutBuilder(builder: (context, constraints) {
       final hPad = constraints.maxWidth >= 600 ? 32.0 : 18.0;
@@ -90,20 +88,31 @@ class _GrowScreenState extends State<GrowScreen> {
                                 scrollDirection: Axis.horizontal,
                                 clipBehavior: Clip.none,
                                 children: [
-                                  ChoiceChip(
-                                    label: const Text('All'),
-                                    selected: _kind == null,
-                                    onSelected: (_) => setState(() => _kind = null),
-                                  ),
                                   for (final k in ResourceKind.values) ...[
-                                    const SizedBox(width: 8),
                                     ChoiceChip(
                                       avatar: Icon(k.icon, size: 16),
                                       label: Text(k.label),
                                       selected: _kind == k,
-                                      onSelected: (_) => setState(() => _kind = _kind == k ? null : k),
+                                      onSelected: (_) => setState(() => _kind = k),
                                     ),
+                                    const SizedBox(width: 8),
                                   ],
+                                  ActionChip(
+                                    avatar: const Icon(Icons.auto_awesome, size: 16, color: AppColors.ai),
+                                    label: const Text('Ask Orbit'),
+                                    labelStyle: const TextStyle(
+                                      color: AppColors.ai,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                    backgroundColor: AppColors.ai.withValues(alpha: context.isDark ? 0.18 : 0.1),
+                                    side: BorderSide(color: AppColors.ai.withValues(alpha: 0.45)),
+                                    onPressed: () => _dock.currentState?.ask(
+                                      recruiter
+                                          ? 'Which apps should I use to find great candidates?'
+                                          : 'Which apps should I use to grow my network?',
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -124,15 +133,15 @@ class _GrowScreenState extends State<GrowScreen> {
                   sliver: SliverGrid(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 380,
-                      mainAxisExtent: 206,
+                      mainAxisExtent: 128,
                       crossAxisSpacing: 14,
                       mainAxisSpacing: 14,
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (context, i) => FadeSlideIn(
-                        key: ValueKey('${_kind?.name}-${resources[i].name}'),
+                        key: ValueKey('${_kind.name}-${resources[i].name}'),
                         index: i,
-                        child: _ResourceCard(resource: resources[i], recruiter: recruiter),
+                        child: _ResourceCard(resource: resources[i]),
                       ),
                       childCount: resources.length,
                     ),
@@ -163,6 +172,7 @@ class _GrowScreenState extends State<GrowScreen> {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(hPad > 20 ? 24 : 12, 0, hPad > 20 ? 24 : 12, hPad > 20 ? 20 : 12),
                 child: AssistantDock(
+                  key: _dock,
                   maxWidth: constraints.maxWidth,
                   panelHeight: math.min(640.0, constraints.maxHeight - (hPad > 20 ? 60 : 40)),
                 ),
@@ -176,9 +186,8 @@ class _GrowScreenState extends State<GrowScreen> {
 }
 
 class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({required this.resource, required this.recruiter});
+  const _ResourceCard({required this.resource});
   final GrowthResource resource;
-  final bool recruiter;
 
   Future<void> _open(BuildContext context) async {
     final ok = await launchUrl(Uri.parse(resource.url), webOnlyWindowName: '_blank').catchError((_) => false);
@@ -191,7 +200,6 @@ class _ResourceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = resource;
     final oc = context.oc;
-    final tip = recruiter ? (r.recruiterTip ?? r.seekerTip) : r.seekerTip;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -212,7 +220,7 @@ class _ResourceCard extends StatelessWidget {
                         Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.tt.titleSmall),
                         const SizedBox(height: 2),
                         Text(
-                          '${r.host} · ${r.kind.label}',
+                          r.host,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: context.tt.labelSmall?.copyWith(color: oc.subtle, letterSpacing: 0),
@@ -225,30 +233,6 @@ class _ResourceCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(r.tagline, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodyMedium),
-              const Spacer(),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(10, 9, 12, 9),
-                decoration: BoxDecoration(
-                  color: oc.surfaceHigh.withValues(alpha: context.isDark ? 0.6 : 0.8),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lightbulb_outline_rounded, size: 15, color: AppColors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        tip,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.tt.bodySmall?.copyWith(color: oc.muted, height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -349,6 +333,12 @@ class _AssistantDockState extends State<AssistantDock> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+  }
+
+  /// Opens the panel and sends [prompt] as if the user had typed it.
+  void ask(String prompt) {
+    AppScope.read(context).setAssistantOpen(true);
+    _send(prompt);
   }
 
   void _newChat() {
@@ -527,7 +517,7 @@ class _AssistantDockState extends State<AssistantDock> {
                           decoration: const BoxDecoration(gradient: _aiGradient),
                           child: InkWell(
                             onTap: ready ? _send : null,
-                            child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+                            child: const Icon(Icons.arrow_upward_rounded, color: AppColors.mistCream, size: 20),
                           ),
                         ),
                       ),
@@ -648,7 +638,7 @@ class _AiAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: const BoxDecoration(shape: BoxShape.circle, gradient: _aiGradient),
-      child: Icon(Icons.auto_awesome, color: Colors.white, size: size * 0.5),
+      child: Icon(Icons.auto_awesome, color: AppColors.mistCream, size: size * 0.5),
     );
   }
 }
@@ -746,7 +736,7 @@ class _Bubble extends StatelessWidget {
           ? const _TypingDots()
           : SelectableText(
               message.text,
-              style: context.tt.bodyMedium?.copyWith(color: mine ? Colors.white : oc.ink, height: 1.45),
+              style: context.tt.bodyMedium?.copyWith(color: mine ? context.cs.onPrimary : oc.ink, height: 1.45),
             ),
     );
     if (mine) {

@@ -325,7 +325,7 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
       padding: const EdgeInsets.all(1.4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(19),
-        gradient: const LinearGradient(colors: [Color(0xFF6D6DF7), Color(0xFFB146E0), Color(0xFF38BDF8)]),
+        gradient: const LinearGradient(colors: AppColors.brandWide),
       ),
       child: Container(
         padding: const EdgeInsets.all(16),

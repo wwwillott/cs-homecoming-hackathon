@@ -185,7 +185,7 @@ class _CapturePrompt extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFFA21CAF)],
+          colors: [AppColors.deepSpruce, AppColors.spruce, Color(0xFF4E9E36)],
         ),
       ),
       child: Material(
@@ -201,10 +201,10 @@ class _CapturePrompt extends StatelessWidget {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: AppColors.mistCream.withValues(alpha: 0.16),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.graphic_eq_rounded, color: Colors.white, size: 26),
+                  child: const Icon(Icons.graphic_eq_rounded, color: AppColors.mistCream, size: 26),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -213,18 +213,18 @@ class _CapturePrompt extends StatelessWidget {
                     children: [
                       Text(
                         'Just met someone?',
-                        style: context.tt.titleMedium?.copyWith(color: Colors.white),
+                        style: context.tt.titleMedium?.copyWith(color: AppColors.mistCream),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         'Record a 30-second recap. We\'ll draft their profile for you to review.',
-                        style: context.tt.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+                        style: context.tt.bodySmall?.copyWith(color: AppColors.mistCream.withValues(alpha: 0.82)),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                const Icon(Icons.arrow_forward_rounded, color: AppColors.mistCream),
               ],
             ),
           ),

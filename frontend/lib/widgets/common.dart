@@ -292,7 +292,7 @@ class OrbitLogo extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6D6DF7), Color(0xFFB146E0)],
+          colors: AppColors.brand,
         ),
       ),
       child: CustomPaint(painter: _LogoPainter()),
@@ -311,9 +311,9 @@ class _LogoPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = size.width * 0.06
-          ..color = Colors.white.withValues(alpha: 0.55));
-    canvas.drawCircle(c, size.width * 0.1, Paint()..color = Colors.white);
-    canvas.drawCircle(c + Offset(r * 0.71, -r * 0.71), size.width * 0.07, Paint()..color = Colors.white);
+          ..color = AppColors.mistCream.withValues(alpha: 0.55));
+    canvas.drawCircle(c, size.width * 0.1, Paint()..color = AppColors.mistCream);
+    canvas.drawCircle(c + Offset(r * 0.71, -r * 0.71), size.width * 0.07, Paint()..color = AppColors.freshLeaf);
   }
 
   @override

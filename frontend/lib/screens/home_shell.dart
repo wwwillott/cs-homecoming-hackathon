@@ -113,12 +113,12 @@ class CaptureFab extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF6D6DF7), Color(0xFFB146E0)],
+                colors: AppColors.brand,
               ),
             ),
             child: InkWell(
               onTap: () => openCapture(context),
-              child: const Icon(Icons.mic_rounded, color: Colors.white, size: 28),
+              child: const Icon(Icons.mic_rounded, color: AppColors.mistCream, size: 28),
             ),
           ),
         ),
@@ -243,7 +243,7 @@ class _RecordButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Ink(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [Color(0xFF6D6DF7), Color(0xFFB146E0)]),
+            gradient: LinearGradient(colors: AppColors.brand),
           ),
           child: InkWell(
             onTap: onTap,
@@ -251,11 +251,11 @@ class _RecordButton extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Icon(Icons.mic_rounded, color: Colors.white, size: 22),
+                  Icon(Icons.mic_rounded, color: AppColors.mistCream, size: 22),
                   SizedBox(width: 10),
                   Text(
                     'Record recap',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                    style: TextStyle(color: AppColors.mistCream, fontWeight: FontWeight.w600, fontSize: 15),
                   ),
                 ],
               ),
