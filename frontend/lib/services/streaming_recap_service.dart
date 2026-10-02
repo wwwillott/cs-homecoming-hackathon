@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/contact.dart';
+import '../utils/ids.dart';
 import 'mic_permission.dart';
 import 'recap_service.dart';
 import 'ws_connect.dart';
@@ -64,7 +65,7 @@ class ApiRecapService implements RecapService {
       host: _apiUri.host,
       port: _apiUri.hasPort ? _apiUri.port : null,
       path: '/api/transcriptions/stream',
-      queryParameters: id == null || id.isEmpty ? null : {'user_id': id},
+      queryParameters: isUuid(id) ? {'user_id': id!} : null,
     );
   }
 
@@ -73,7 +74,7 @@ class ApiRecapService implements RecapService {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (_userId?.call() case final id? when id.isNotEmpty) 'X-User-Id': id,
+        if (_userId?.call() case final id? when isUuid(id)) 'X-User-Id': id,
       };
 
   /// Render free instances sleep; hit HTTP first so the WebSocket upgrade

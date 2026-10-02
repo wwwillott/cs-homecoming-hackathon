@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../utils/ids.dart';
 import '../widgets/common.dart';
 import '../widgets/growing_tree.dart';
 
@@ -42,7 +43,7 @@ class _AuthScreenState extends State<AuthScreen> {
       session = await _serverSession(app.authService, username, password)
           .timeout(const Duration(seconds: 4));
     } catch (_) {
-      session = AuthSession(userId: 'local-${username.toLowerCase()}', username: username);
+      session = AuthSession(userId: localUserIdFor(username), username: username);
     }
     await app.signIn(session);
     if (mounted) setState(() => _busy = false);

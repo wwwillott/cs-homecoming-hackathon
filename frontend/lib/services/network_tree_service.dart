@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/contact.dart';
 import '../models/network_tree.dart';
+import '../utils/ids.dart';
 
 class NetworkTreeService {
   NetworkTreeService({
@@ -25,7 +26,7 @@ class NetworkTreeService {
     final id = _userId?.call();
     return {
       'Content-Type': 'application/json',
-      if (id != null && id.isNotEmpty) 'X-User-Id': id,
+      if (isUuid(id)) 'X-User-Id': id!,
     };
   }
 
