@@ -268,19 +268,6 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
                   ]),
                   _section('How you met', Icons.place_outlined, [
                     _field('metAt', 'Event or place', icon: Icons.event_outlined),
-                    if (app.allEvents.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final e in app.allEvents.take(8))
-                            ActionChip(
-                              label: Text(e, style: const TextStyle(fontSize: 12)),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => _c['metAt']!.text = e,
-                            ),
-                        ],
-                      ),
                     _row([
                       _dateButton(
                         label: 'Date met',

@@ -22,8 +22,8 @@ class _Dest {
 const _destinations = [
   _Dest(AppTab.home, 'Home', Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
   _Dest(AppTab.people, 'People', Icons.people_alt_outlined, Icons.people_alt_rounded),
-  _Dest(AppTab.network, 'Network', Icons.hub_outlined, Icons.hub_rounded),
-  _Dest(AppTab.grow, 'Grow your tree', Icons.park_outlined, Icons.park_rounded, 'Grow'),
+  _Dest(AppTab.network, 'Your Tree', Icons.hub_outlined, Icons.hub_rounded, 'Tree'),
+  _Dest(AppTab.grow, 'Nourish your Network', Icons.park_outlined, Icons.park_rounded, 'Nourish'),
 ];
 
 class HomeShell extends StatelessWidget {
@@ -188,7 +188,7 @@ class _SideNav extends StatelessWidget {
                   const OrbitLogo(size: 36),
                   if (extended) ...[
                     const SizedBox(width: 12),
-                    Text('Orbit', style: context.tt.titleLarge),
+                    Text('Spruce', style: context.tt.titleLarge),
                   ],
                 ],
               ),

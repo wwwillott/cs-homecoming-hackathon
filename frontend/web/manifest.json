@@ -1,11 +1,11 @@
 {
-    "name": "orbit",
-    "short_name": "orbit",
+    "name": "Spruce",
+    "short_name": "Spruce",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#195D30",
     "theme_color": "#195D30",
-    "description": "Orbit - network building app",
+    "description": "Spruce - network building app",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

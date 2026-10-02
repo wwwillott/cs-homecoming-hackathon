@@ -62,7 +62,7 @@ class _GrowScreenState extends State<GrowScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Grow your tree', style: context.tt.headlineSmall),
+                                      Text('Nourish your Network', style: context.tt.headlineSmall),
                                       const SizedBox(height: 4),
                                       Text(
                                         recruiter
@@ -99,7 +99,7 @@ class _GrowScreenState extends State<GrowScreen> {
                                   ],
                                   ActionChip(
                                     avatar: const Icon(Icons.auto_awesome, size: 16, color: AppColors.ai),
-                                    label: const Text('Ask Orbit'),
+                                    label: const Text('Ask Spruce'),
                                     labelStyle: const TextStyle(
                                       color: AppColors.ai,
                                       fontWeight: FontWeight.w600,
@@ -444,7 +444,7 @@ class _AssistantDockState extends State<AssistantDock> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Orbit AI', style: context.tt.titleSmall),
+                    Text('Spruce', style: context.tt.titleSmall),
                     Text('Knows your network', style: context.tt.bodySmall?.copyWith(color: oc.subtle)),
                   ],
                 ),
@@ -607,7 +607,7 @@ class _CollapsedBar extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Ask Orbit AI about your network…',
+                    'Ask Spruce about your network…',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.tt.bodyMedium?.copyWith(color: oc.muted),

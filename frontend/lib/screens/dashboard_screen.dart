@@ -26,7 +26,7 @@ class DashboardScreen extends StatelessWidget {
             Expanded(
               child: EmptyState(
                 icon: Icons.hub_outlined,
-                title: 'Your orbit is empty',
+                title: 'Your tree is bare',
                 message: 'Record a quick recap after you meet someone, or add a contact by hand.',
                 action: Wrap(
                   spacing: 10,

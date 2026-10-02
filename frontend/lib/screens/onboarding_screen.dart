@@ -123,7 +123,7 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
                       const OrbitLogo(size: 36),
                       const SizedBox(width: 12),
                       Text(
-                        'Orbit',
+                        'Spruce',
                         style: context.tt.titleLarge?.copyWith(color: Colors.white),
                       ),
                     ],
@@ -131,7 +131,7 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
                   const Spacer(),
                   FadeSlideIn(
                     child: Text(
-                      'Every connection,\nin one orbit.',
+                      'Every connection,\non one tree.',
                       style: (widget.large ? context.tt.displaySmall : context.tt.headlineMedium)
                           ?.copyWith(color: Colors.white, height: 1.1),
                     ),
@@ -268,7 +268,7 @@ class _Form extends StatelessWidget {
         const SizedBox(height: 6),
         Text('You can change any of this later in Settings.', style: context.tt.bodySmall),
         const SizedBox(height: 26),
-        Text('How will you use Orbit?', style: context.tt.labelMedium),
+        Text('How will you use Spruce?', style: context.tt.labelMedium),
         const SizedBox(height: 10),
         for (final m in UserMode.values) ...[
           _ModeCard(mode: m, selected: m == mode, onTap: () => onMode(m)),

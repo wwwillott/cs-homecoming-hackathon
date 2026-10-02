@@ -19,7 +19,7 @@ class OrbitApp extends StatelessWidget {
       child: ListenableBuilder(
         listenable: state,
         builder: (context, _) => MaterialApp(
-          title: 'Orbit',
+          title: 'Spruce',
           debugShowCheckedModeBanner: false,
           theme: _lightTheme,
           darkTheme: _darkTheme,

@@ -127,7 +127,7 @@ class MockAssistantService implements AssistantService {
     if (list.isEmpty) {
       return 'Your network is empty right now, so start with places where conversations happen naturally. '
           'Look for a meetup or hackathon on Luma, Meetup, or Devpost this week, and record a quick recap after each conversation. '
-          'Once a few people are in Orbit, I can suggest who to ask for intros.';
+          'Once a few people are in Spruce, I can suggest who to ask for intros.';
     }
 
     final named = _mentioned(list, q);
@@ -227,7 +227,7 @@ class MockAssistantService implements AssistantService {
         '• Devpost: a hackathon lets you work alongside people and meet sponsors.\n'
         '• Discord: join a community you care about and answer questions. Helping is the best intro.\n'
         '• LinkedIn: connect within a day of meeting someone, with a note about where you met.\n\n'
-        'Start with one events app and one community, and record a quick recap in Orbit after each conversation.';
+        'Start with one events app and one community, and record a quick recap in Spruce after each conversation.';
   }
 
   String _overview(List<Contact> list) {

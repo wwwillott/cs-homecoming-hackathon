@@ -275,7 +275,7 @@ class _TopBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Network', style: context.tt.headlineSmall),
+        Text('Your Tree', style: context.tt.headlineSmall),
         const SizedBox(height: 2),
         Text('${contacts.length} people · $links mutual links', style: context.tt.bodySmall),
       ],

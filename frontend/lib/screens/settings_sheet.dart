@@ -41,7 +41,7 @@ class _SettingsBody extends StatelessWidget {
         children: [
           Text('Settings', style: context.tt.headlineSmall),
           const SizedBox(height: 22),
-          Text('I\'m using Orbit as a', style: context.tt.labelMedium),
+          Text('I\'m using Spruce as a', style: context.tt.labelMedium),
           const SizedBox(height: 8),
           SegmentedButton<UserMode>(
             segments: const [
@@ -90,7 +90,7 @@ class _SettingsBody extends StatelessWidget {
             subtitle: 'Clear everything and start from the welcome screen',
             destructive: true,
             onTap: () async {
-              final ok = await _confirm(context, 'Reset Orbit?', 'All contacts on this device will be removed.');
+              final ok = await _confirm(context, 'Reset Spruce?', 'All contacts on this device will be removed.');
               if (ok && context.mounted) {
                 Navigator.of(context).pop();
                 await app.resetApp();
