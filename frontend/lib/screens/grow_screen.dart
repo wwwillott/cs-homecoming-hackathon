@@ -440,6 +440,26 @@ class _AssistantDockState extends State<AssistantDock> {
     });
   }
 
+  /// Opens the panel and puts [prompt] in the box so the user can finish it.
+  void _fillDraft(String prompt) {
+    AppScope.read(context).setAssistantOpen(true);
+    _input.value = TextEditingValue(
+      text: prompt,
+      selection: TextSelection.collapsed(offset: prompt.length),
+    );
+    _focus.requestFocus();
+  }
+
+  void _useSuggestion(String text) {
+    if (text.toLowerCase().startsWith('find alumni')) {
+      final school = AppScope.read(context).university.trim();
+      final from = school.isEmpty ? 'my university' : school;
+      _fillDraft('Find alumni from $from who work at local companies in ');
+      return;
+    }
+    _send(text);
+  }
+
   /// Opens the panel and sends [prompt] as if the user had typed it.
   void ask(String prompt) {
     AppScope.read(context).setAssistantOpen(true);
@@ -755,7 +775,11 @@ class _AssistantDockState extends State<AssistantDock> {
           for (var i = 0; i < suggestions.length; i++)
             FadeSlideIn(
               index: i,
-              child: _SuggestionTile(text: suggestions[i], onTap: () => _send(suggestions[i])),
+              child: _SuggestionTile(
+                text: suggestions[i],
+                fillsIn: suggestions[i].toLowerCase().startsWith('find alumni'),
+                onTap: () => _useSuggestion(suggestions[i]),
+              ),
             ),
       ],
     );
@@ -776,7 +800,7 @@ class _AssistantDockState extends State<AssistantDock> {
         final pending = _sending && i == 0;
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _Bubble(message: m, typing: pending && m.text.isEmpty),
+          child: _Bubble(message: m, thinking: pending),
         );
       },
     );
@@ -863,9 +887,10 @@ class _AiAvatar extends StatelessWidget {
 }
 
 class _SuggestionTile extends StatelessWidget {
-  const _SuggestionTile({required this.text, required this.onTap});
+  const _SuggestionTile({required this.text, required this.onTap, this.fillsIn = false});
   final String text;
   final VoidCallback onTap;
+  final bool fillsIn;
 
   @override
   Widget build(BuildContext context) {
@@ -888,7 +913,7 @@ class _SuggestionTile extends StatelessWidget {
                 const Icon(Icons.auto_awesome_outlined, size: 17, color: AppColors.ai),
                 const SizedBox(width: 10),
                 Expanded(child: Text(text, style: context.tt.bodyMedium)),
-                Icon(Icons.arrow_forward_rounded, size: 17, color: oc.subtle),
+                Icon(fillsIn ? Icons.edit_outlined : Icons.arrow_forward_rounded, size: 17, color: oc.subtle),
               ],
             ),
           ),
@@ -931,14 +956,30 @@ class _SuggestionSkeletonState extends State<_SuggestionSkeleton> with SingleTic
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, this.typing = false});
+  const _Bubble({required this.message, this.thinking = false});
   final ChatMessage message;
-  final bool typing;
+  final bool thinking;
 
   @override
   Widget build(BuildContext context) {
     final oc = context.oc;
     final mine = message.role == ChatRole.user;
+    final textStyle = context.tt.bodyMedium?.copyWith(color: mine ? context.cs.onPrimary : oc.ink, height: 1.45);
+    final body = message.text.isEmpty
+        ? const _TypingDots()
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (mine)
+                SelectableText(message.text, style: textStyle)
+              else
+                ChatMarkdown(text: message.text, style: textStyle!),
+              if (thinking) ...[
+                const SizedBox(height: 8),
+                const _TypingDots(),
+              ],
+            ],
+          );
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -951,17 +992,7 @@ class _Bubble extends StatelessWidget {
           bottomRight: Radius.circular(mine ? 6 : 18),
         ),
       ),
-      child: typing
-          ? const _TypingDots()
-          : mine
-              ? SelectableText(
-                  message.text,
-                  style: context.tt.bodyMedium?.copyWith(color: context.cs.onPrimary, height: 1.45),
-                )
-              : ChatMarkdown(
-                  text: message.text,
-                  style: context.tt.bodyMedium!.copyWith(color: oc.ink, height: 1.45),
-                ),
+      child: body,
     );
     if (mine) {
       return Align(alignment: Alignment.centerRight, child: bubble);

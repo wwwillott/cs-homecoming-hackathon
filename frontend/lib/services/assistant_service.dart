@@ -80,11 +80,11 @@ class ApiAssistantService implements AssistantService {
   Future<List<String>> suggestedPrompts() async {
     final label = _sharedLabel?.call();
     if (label != null && label.isNotEmpty) {
-      return [
+      return _withAlumni([
         'Who in $label\'s tree works in robotics?',
         'Who should I introduce across our trees?',
         'What overlap do I have with $label\'s network?',
-      ];
+      ]);
     }
     try {
       final response = await _client.get(_uri('/api/assistant/prompts'));
@@ -94,12 +94,12 @@ class ApiAssistantService implements AssistantService {
           for (final item in body['prompts'] as List? ?? const [])
             if (item is String && item.trim().isNotEmpty) item,
         ];
-        if (prompts.isNotEmpty) return prompts;
+        if (prompts.isNotEmpty) return _withAlumni(prompts);
       }
     } catch (_) {
       // The chip still shows so a failed backend is visible when they send it.
     }
-    return const ['Find events near me'];
+    return _withAlumni(const ['Find events near me']);
   }
 
   @override
@@ -156,6 +156,13 @@ class ApiAssistantService implements AssistantService {
     if (sessionId == null || sessionId.isEmpty) return;
     unawaited(_client.delete(_uri('/api/assistant/sessions/$sessionId')).then((_) {}, onError: (_) {}));
   }
+}
+
+const alumniPromptChip = 'Find alumni from my university in a company or field';
+
+List<String> _withAlumni(List<String> prompts) {
+  if (prompts.any((prompt) => prompt.toLowerCase().startsWith('find alumni'))) return prompts;
+  return [...prompts, alumniPromptChip];
 }
 
 /// A short snapshot of the local network, sent with the first live turn.
@@ -269,8 +276,9 @@ class MockAssistantService implements AssistantService {
   }
 
   List<String> _prompts(List<String> prompts) {
-    const chip = 'Find events near me';
-    return [chip, ...prompts.where((prompt) => prompt != chip)];
+    const events = 'Find events near me';
+    const alumni = 'Find alumni from my university in a company or field';
+    return [events, alumni, ...prompts.where((prompt) => prompt != events && prompt != alumni)];
   }
 
   @override

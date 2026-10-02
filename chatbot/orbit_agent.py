@@ -278,6 +278,14 @@ class OrbitAgent:
             if self.location.university:
                 task += f" Prefer events at or near {self.location.university}."
             return f"{text.strip()}\n\n{task}"
+        if _is_find_alumni(text):
+            school = self.location.university or "their university"
+            return (
+                f"{text.strip()}\n\n"
+                f"Search the live web for alumni of {school} near {self.location.label}. "
+                "Use the company or field named in the request. "
+                "Return real people, alumni groups, or company pages with source links."
+            )
         return text.strip()
 
     def _agent(self) -> dict:
@@ -375,6 +383,10 @@ class OrbitAgent:
 def _is_find_events(text: str) -> bool:
     normalized = " ".join(text.lower().replace("?", "").split())
     return normalized in {"find events near me", "find events nearby"}
+
+
+def _is_find_alumni(text: str) -> bool:
+    return text.lower().lstrip().startswith("find alumni")
 
 
 def _new_text(seen: dict[tuple[str, int], str], item_id: str, content_index: int, text: str, *, append: bool) -> str:
