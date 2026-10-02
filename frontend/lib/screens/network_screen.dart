@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../graph/graph_options.dart';
 import '../graph/graph_style.dart';
 import '../graph/graph_view.dart';
 import '../models/contact.dart';
+import '../models/network_tree.dart';
 import '../navigation.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -20,6 +22,7 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   final _graph = GraphViewController();
+  final _sharedGraph = GraphViewController();
   bool _legendOpen = false;
   String? _lastFocus;
   bool _focusFromTap = false;
@@ -47,16 +50,26 @@ class _NetworkScreenState extends State<NetworkScreen> {
       final id = app.graphFocusId;
       _lastFocus = id;
       if (id != null && !_focusFromTap) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _graph.centerOn(id));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (app.attachedContacts.any((c) => c.id == id)) {
+            _sharedGraph.centerOn(id);
+          } else {
+            _graph.centerOn(id);
+          }
+        });
       }
       _focusFromTap = false;
     }
 
-    if (contacts.isEmpty) {
-      return const EmptyState(
+    if (contacts.isEmpty && !app.isSharedMode) {
+      return EmptyState(
         icon: Icons.hub_outlined,
         title: 'Nothing to map yet',
         message: 'Add a few connections and your network graph will appear here.',
+        action: FilledButton.tonal(
+          onPressed: () => _openJoin(context, app),
+          child: const Text('Join a shared tree'),
+        ),
       );
     }
 
@@ -65,16 +78,48 @@ class _NetworkScreenState extends State<NetworkScreen> {
     final graphStack = Stack(
       children: [
         Positioned.fill(
-          child: GraphView(
-            contacts: contacts,
-            colorBy: app.colorBy,
-            sizeBy: app.sizeBy,
-            showPeerLinks: app.showPeerLinks,
-            focusId: app.graphFocusId,
-            onFocusChanged: (id) => _onFocus(app, id),
-            controller: _graph,
-            fitPadding: EdgeInsets.fromLTRB(32, narrow ? 120 : 96, narrow ? 32 : 190, narrow ? 220 : 60),
-          ),
+          child: app.isSharedMode
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: GraphView(
+                        contacts: contacts,
+                        colorBy: app.colorBy,
+                        sizeBy: app.sizeBy,
+                        showPeerLinks: app.showPeerLinks,
+                        focusId: app.graphFocusId,
+                        onFocusChanged: (id) => _onFocus(app, id),
+                        controller: _graph,
+                        anchorLabel: 'You',
+                        fitPadding: EdgeInsets.fromLTRB(24, narrow ? 150 : 120, 16, narrow ? 220 : 60),
+                      ),
+                    ),
+                    VerticalDivider(width: 1, color: context.oc.border),
+                    Expanded(
+                      child: GraphView(
+                        contacts: app.attachedContacts,
+                        colorBy: app.colorBy,
+                        sizeBy: app.sizeBy,
+                        showPeerLinks: app.showPeerLinks,
+                        focusId: app.graphFocusId,
+                        onFocusChanged: (id) => _onFocus(app, id),
+                        controller: _sharedGraph,
+                        anchorLabel: app.activeSharedTree?.shortLabel ?? 'Them',
+                        fitPadding: EdgeInsets.fromLTRB(16, narrow ? 150 : 120, 24, narrow ? 220 : 60),
+                      ),
+                    ),
+                  ],
+                )
+              : GraphView(
+                  contacts: contacts,
+                  colorBy: app.colorBy,
+                  sizeBy: app.sizeBy,
+                  showPeerLinks: app.showPeerLinks,
+                  focusId: app.graphFocusId,
+                  onFocusChanged: (id) => _onFocus(app, id),
+                  controller: _graph,
+                  fitPadding: EdgeInsets.fromLTRB(32, narrow ? 120 : 96, narrow ? 32 : 190, narrow ? 220 : 60),
+                ),
         ),
         Positioned(
           top: 0,
@@ -84,12 +129,24 @@ class _NetworkScreenState extends State<NetworkScreen> {
             bottom: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(narrow ? 14 : 24, 14, narrow ? 14 : 24, 0),
-              child: _TopBar(
-                compact: narrow,
-                contacts: contacts,
-                links: styler.edges.length,
-                onSearch: () => _openSearch(context, app),
-                onFit: _graph.fitToView,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TopBar(
+                    compact: narrow,
+                    contacts: contacts,
+                    links: styler.edges.length,
+                    onSearch: () => _openSearch(context, app),
+                    onFit: _fitAll,
+                    onShare: () => _openShare(context, app),
+                    onJoin: () => _openJoin(context, app),
+                    onLeave: app.isSharedMode ? app.leaveSharedMode : null,
+                  ),
+                  if (app.isSharedMode) ...[
+                    const SizedBox(height: 8),
+                    _SharedModeBanner(label: app.activeSharedTree?.label ?? 'Shared network'),
+                  ],
+                ],
               ),
             ),
           ),
@@ -237,9 +294,34 @@ class _NetworkScreenState extends State<NetworkScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       constraints: const BoxConstraints(maxWidth: 560),
-      builder: (_) => _SearchSheet(contacts: app.contacts),
+      builder: (_) => _SearchSheet(contacts: app.visibleContacts),
     );
     if (id != null) _focusAndCenter(app, id);
+  }
+
+  void _fitAll() {
+    _graph.fitToView();
+    _sharedGraph.fitToView();
+  }
+
+  Future<void> _openShare(BuildContext context, AppState app) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 480),
+      builder: (_) => const _ShareTreeSheet(),
+    );
+  }
+
+  Future<void> _openJoin(BuildContext context, AppState app) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 480),
+      builder: (_) => const _JoinTreeSheet(),
+    );
   }
 }
 
@@ -250,6 +332,9 @@ class _TopBar extends StatelessWidget {
     required this.links,
     required this.onSearch,
     required this.onFit,
+    required this.onShare,
+    required this.onJoin,
+    this.onLeave,
   });
 
   final bool compact;
@@ -257,6 +342,9 @@ class _TopBar extends StatelessWidget {
   final int links;
   final VoidCallback onSearch;
   final VoidCallback onFit;
+  final VoidCallback onShare;
+  final VoidCallback onJoin;
+  final VoidCallback? onLeave;
 
   @override
   Widget build(BuildContext context) {
@@ -286,8 +374,12 @@ class _TopBar extends StatelessWidget {
         tooltip: app.showPeerLinks ? 'Hide who-knows-who links' : 'Show who-knows-who links',
         active: app.showPeerLinks,
         onTap: () => app.setShowPeerLinks(!app.showPeerLinks),
-        child: const Icon(Icons.share_outlined, size: 18),
+        child: const Icon(Icons.hub_outlined, size: 18),
       ),
+      _GlassButton(tooltip: 'Share tree', onTap: onShare, child: const Icon(Icons.qr_code_2_rounded, size: 19)),
+      _GlassButton(tooltip: 'Join a tree', onTap: onJoin, child: const Icon(Icons.login_rounded, size: 18)),
+      if (onLeave != null)
+        _GlassButton(tooltip: 'Leave shared mode', active: true, onTap: onLeave!, child: const Icon(Icons.link_off_rounded, size: 18)),
       _GlassButton(tooltip: 'Find someone', onTap: onSearch, child: const Icon(Icons.search_rounded, size: 19)),
       if (compact)
         _GlassButton(
@@ -315,7 +407,6 @@ class _TopBar extends StatelessWidget {
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
             child: Row(
               children: [
                 for (var i = 0; i < controls.length; i++) ...[if (i > 0) const SizedBox(width: 8), controls[i]],
@@ -326,12 +417,19 @@ class _TopBar extends StatelessWidget {
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        title,
-        const Spacer(),
-        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: controls),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.end, children: controls),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -783,4 +881,317 @@ class _SearchSheetState extends State<_SearchSheet> {
       ),
     );
   }
+}
+
+class _SharedModeBanner extends StatelessWidget {
+  const _SharedModeBanner({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final oc = context.oc;
+    final primary = context.cs.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: context.isDark ? 0.18 : 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: primary.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.link_rounded, size: 18, color: primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Shared mode · browsing $label (read-only)',
+              style: context.tt.bodySmall?.copyWith(color: oc.ink, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareTreeSheet extends StatefulWidget {
+  const _ShareTreeSheet();
+
+  @override
+  State<_ShareTreeSheet> createState() => _ShareTreeSheetState();
+}
+
+class _ShareTreeSheetState extends State<_ShareTreeSheet> {
+  String? _token;
+  String? _error;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _export());
+  }
+
+  Future<void> _export() async {
+    final app = AppScope.read(context);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final code = await app.exportPrimaryTree();
+      if (!mounted) return;
+      setState(() {
+        _token = code.token;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Bad state: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final oc = context.oc;
+    final token = _token;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 8, 24, 24 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Share your tree', style: context.tt.titleLarge),
+          const SizedBox(height: 6),
+          Text(
+            'Show this one-time code so someone nearby can attach a read-only copy of your network.',
+            style: context.tt.bodyMedium?.copyWith(color: oc.muted),
+          ),
+          const SizedBox(height: 20),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null) ...[
+            Text(_error!, style: TextStyle(color: context.cs.error)),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: _export, child: const Text('Try again')),
+          ] else if (token != null) ...[
+            Center(
+              child: Container(
+                width: 180,
+                height: 180,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: oc.surfaceHigh,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: oc.border),
+                ),
+                child: CustomPaint(painter: _ShareCodePainter(token: token, color: oc.ink)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SelectableText(
+              token,
+              textAlign: TextAlign.center,
+              style: context.tt.displaySmall?.copyWith(
+                letterSpacing: 6,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: token));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Share code copied')),
+                );
+              },
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Copy code'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JoinTreeSheet extends StatefulWidget {
+  const _JoinTreeSheet();
+
+  @override
+  State<_JoinTreeSheet> createState() => _JoinTreeSheetState();
+}
+
+class _JoinTreeSheetState extends State<_JoinTreeSheet> {
+  final _controller = TextEditingController();
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _join() async {
+    final code = _controller.text.trim().toUpperCase();
+    if (code.length < 4) {
+      setState(() => _error = 'Enter the 6-character share code.');
+      return;
+    }
+    final app = AppScope.read(context);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await app.joinSharedTree(code);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attached ${app.activeSharedTree?.label ?? 'shared network'}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Bad state: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _reopen(NetworkTree tree) async {
+    final app = AppScope.read(context);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await app.enterSharedMode(tree);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Bad state: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final oc = context.oc;
+    final attached = app.trees.where((tree) => !tree.isPrimary).toList();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 8, 24, 24 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Join a shared tree', style: context.tt.titleLarge),
+          const SizedBox(height: 6),
+          Text(
+            'Enter the code from someone nearby to attach their network as a second cloud.',
+            style: context.tt.bodyMedium?.copyWith(color: oc.muted),
+          ),
+          if (attached.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Already attached', style: context.tt.labelLarge),
+            const SizedBox(height: 8),
+            for (final tree in attached)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.hub_outlined, color: context.cs.primary),
+                title: Text(tree.label),
+                subtitle: const Text('Tap to show again'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _loading ? null : () => _reopen(tree),
+              ),
+            const Divider(height: 28),
+          ] else
+            const SizedBox(height: 18),
+          TextField(
+            controller: _controller,
+            autofocus: attached.isEmpty,
+            textCapitalization: TextCapitalization.characters,
+            textAlign: TextAlign.center,
+            style: context.tt.headlineSmall?.copyWith(letterSpacing: 6, fontWeight: FontWeight.w700),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              LengthLimitingTextInputFormatter(6),
+              _UpperCaseFormatter(),
+            ],
+            decoration: const InputDecoration(hintText: 'ABC123'),
+            onSubmitted: (_) => _join(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: TextStyle(color: context.cs.error)),
+          ],
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _loading ? null : _join,
+            child: _loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Attach tree'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpperCaseFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
+  }
+}
+
+class _ShareCodePainter extends CustomPainter {
+  _ShareCodePainter({required this.token, required this.color});
+
+  final String token;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const cells = 11;
+    final cell = size.shortestSide / cells;
+    final paint = Paint()..color = color;
+    final seed = token.codeUnits.fold<int>(0, (sum, unit) => (sum * 31 + unit) & 0x7fffffff);
+    for (var y = 0; y < cells; y++) {
+      for (var x = 0; x < cells; x++) {
+        final corner = (x < 3 && y < 3) || (x > cells - 4 && y < 3) || (x < 3 && y > cells - 4);
+        final bit = ((seed >> ((x * 3 + y) % 28)) ^ (x * 17 + y * 13)) & 1;
+        if (corner || bit == 1) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(x * cell + 1, y * cell + 1, cell - 2, cell - 2),
+              const Radius.circular(2),
+            ),
+            paint,
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ShareCodePainter oldDelegate) =>
+      oldDelegate.token != token || oldDelegate.color != color;
 }

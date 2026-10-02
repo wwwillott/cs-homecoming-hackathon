@@ -68,6 +68,23 @@ class _SettingsBody extends StatelessWidget {
           const SizedBox(height: 18),
           const Divider(),
           const SizedBox(height: 6),
+          if (app.username != null) ...[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.account_circle_outlined, color: context.oc.muted),
+              title: Text(app.username!, style: context.tt.titleSmall),
+              subtitle: Text('Signed in', style: context.tt.bodySmall),
+            ),
+            _ActionRow(
+              icon: Icons.logout_rounded,
+              title: 'Sign out',
+              subtitle: 'Return to the login screen',
+              onTap: () async {
+                Navigator.of(context).pop();
+                await app.signOut();
+              },
+            ),
+          ],
           _ActionRow(
             icon: Icons.auto_awesome_motion_outlined,
             title: 'Load sample network',

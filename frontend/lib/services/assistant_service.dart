@@ -60,12 +60,15 @@ class ApiAssistantService implements AssistantService {
       'ORBIT_API_URL',
       defaultValue: 'http://127.0.0.1:8000',
     ),
+    String? Function()? sharedLabel,
     http.Client? client,
   })  : _apiUri = Uri.parse(apiUrl),
+        _sharedLabel = sharedLabel,
         _client = client ?? http.Client();
 
   final String Function() networkContext;
   final Uri _apiUri;
+  final String? Function()? _sharedLabel;
   final http.Client _client;
   String? _sessionId;
 
@@ -73,6 +76,14 @@ class ApiAssistantService implements AssistantService {
 
   @override
   Future<List<String>> suggestedPrompts() async {
+    final label = _sharedLabel?.call();
+    if (label != null && label.isNotEmpty) {
+      return [
+        'Who in $label\'s tree works in robotics?',
+        'Who should I introduce across our trees?',
+        'What overlap do I have with $label\'s network?',
+      ];
+    }
     try {
       final response = await _client.get(_uri('/api/assistant/prompts'));
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -169,6 +180,9 @@ class MockAssistantService implements AssistantService {
   final List<Contact> Function() contacts;
   final UserMode Function() mode;
   final String Function() userName;
+
+  @override
+  void reset() {}
 
   @override
   Future<List<String>> suggestedPrompts() async {

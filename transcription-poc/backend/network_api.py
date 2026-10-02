@@ -23,6 +23,10 @@ from api_models import (
     NetworkCitation,
     NetworkQuestion,
     NetworkResponse,
+    NetworkTreeExportResponse,
+    NetworkTreeImportRequest,
+    NetworkTreeResponse,
+    NoteResponse,
     OrganizationResponse,
     PersonCreate,
     PersonResponse,
@@ -37,6 +41,8 @@ from database.models import (
     Conversation,
     ConversationPerson,
     KnowledgeChunk,
+    NetworkSnapshot,
+    NetworkTree,
     Organization,
     Person,
     PersonNote,
@@ -53,6 +59,12 @@ from database.session import get_session
 from models import ConversationSummary, PersonProfileSuggestion, SuggestedText
 from providers import VertexGeminiProvider
 from transcription_store import canonical_transcript
+from tree_store import (
+    create_snapshot,
+    ensure_primary_tree,
+    import_snapshot,
+    owned_tree,
+)
 
 router = APIRouter(prefix="/api")
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -70,11 +82,44 @@ async def current_user_id(
 
     if await session.get(User, user_id) is None:
         session.add(User(id=user_id))
-        await session.commit()
+        await session.flush()
+    await ensure_primary_tree(session, user_id)
+    await session.commit()
     return user_id
 
 
 CurrentUser = Annotated[UUID, Depends(current_user_id)]
+
+
+def tree_response(tree: NetworkTree) -> NetworkTreeResponse:
+    return NetworkTreeResponse(
+        id=tree.id,
+        label=tree.label,
+        is_primary=tree.is_primary,
+        is_read_only=tree.is_read_only,
+        attributed_user_id=tree.attributed_user_id,
+        source_snapshot_id=tree.source_snapshot_id,
+        created_at=tree.created_at,
+    )
+
+
+async def require_owned_tree(
+    session: AsyncSession, user_id: UUID, tree_id: UUID
+) -> NetworkTree:
+    tree = await owned_tree(session, user_id, tree_id)
+    if tree is None:
+        raise HTTPException(status_code=404, detail="Network tree not found.")
+    return tree
+
+
+async def require_writable_tree(tree: NetworkTree) -> NetworkTree:
+    if tree.is_read_only:
+        raise HTTPException(status_code=403, detail="This shared tree is read-only.")
+    return tree
+
+
+async def primary_tree(session: AsyncSession, user_id: UUID) -> NetworkTree:
+    return await ensure_primary_tree(session, user_id)
 
 
 async def owned_person(session: AsyncSession, user_id: UUID, person_id: UUID) -> Person:
@@ -83,6 +128,14 @@ async def owned_person(session: AsyncSession, user_id: UUID, person_id: UUID) ->
     )
     if person is None:
         raise HTTPException(status_code=404, detail="Person not found.")
+    return person
+
+
+async def writable_person(session: AsyncSession, user_id: UUID, person_id: UUID) -> Person:
+    person = await owned_person(session, user_id, person_id)
+    tree = await session.get(NetworkTree, person.network_tree_id)
+    if tree is None or tree.is_read_only:
+        raise HTTPException(status_code=403, detail="This shared tree is read-only.")
     return person
 
 
@@ -121,6 +174,7 @@ async def person_response(session: AsyncSession, person: Person) -> PersonRespon
         where_met=person.where_met,
         met_at=person.met_at,
         is_self=person.is_self,
+        network_tree_id=person.network_tree_id,
         contact_methods=[ContactMethodResponse.model_validate(contact) for contact in contacts],
         organizations=[
             OrganizationResponse(
@@ -133,6 +187,23 @@ async def person_response(session: AsyncSession, person: Person) -> PersonRespon
         ],
         goals=[topic.topic for topic in topics if topic.kind == TopicKind.GOAL],
         interests=[topic.topic for topic in topics if topic.kind == TopicKind.INTEREST],
+        notes=[
+            NoteResponse(
+                id=note.id,
+                general_note=note.general_note,
+                next_steps=note.next_steps,
+                how_to_serve=note.how_to_serve,
+                conversation_id=note.conversation_id,
+                created_at=note.created_at,
+            )
+            for note in (
+                await session.scalars(
+                    select(PersonNote)
+                    .where(PersonNote.person_id == person.id)
+                    .order_by(PersonNote.created_at)
+                )
+            ).all()
+        ],
         created_at=person.created_at,
         updated_at=person.updated_at,
     )
@@ -141,6 +212,7 @@ async def person_response(session: AsyncSession, person: Person) -> PersonRespon
 async def add_organization(
     session: AsyncSession,
     user_id: UUID,
+    tree_id: UUID,
     person_id: UUID,
     name: str,
     kind: str,
@@ -148,12 +220,17 @@ async def add_organization(
 ) -> None:
     organization = await session.scalar(
         select(Organization).where(
-            Organization.owner_user_id == user_id,
+            Organization.network_tree_id == tree_id,
             Organization.name == name,
         )
     )
     if organization is None:
-        organization = Organization(owner_user_id=user_id, name=name, kind=kind)
+        organization = Organization(
+            owner_user_id=user_id,
+            network_tree_id=tree_id,
+            name=name,
+            kind=kind,
+        )
         session.add(organization)
         await session.flush()
     session.add(
@@ -169,8 +246,10 @@ async def add_organization(
 async def create_person(
     payload: PersonCreate, session: Session, user_id: CurrentUser
 ) -> PersonResponse:
+    tree = await require_writable_tree(await primary_tree(session, user_id))
     person = Person(
         owner_user_id=user_id,
+        network_tree_id=tree.id,
         name=payload.name,
         alpha_score=payload.alpha_score,
         how_met=payload.how_met,
@@ -200,6 +279,7 @@ async def create_person(
         await add_organization(
             session,
             user_id,
+            tree.id,
             person.id,
             organization.name,
             organization.kind,
@@ -217,10 +297,21 @@ async def create_person(
 
 
 @router.get("/people", response_model=list[PersonResponse])
-async def list_people(session: Session, user_id: CurrentUser) -> list[PersonResponse]:
+async def list_people(
+    session: Session,
+    user_id: CurrentUser,
+    tree_id: UUID | None = None,
+) -> list[PersonResponse]:
+    tree = (
+        await require_owned_tree(session, user_id, tree_id)
+        if tree_id is not None
+        else await primary_tree(session, user_id)
+    )
     people = (
         await session.scalars(
-            select(Person).where(Person.owner_user_id == user_id).order_by(Person.name)
+            select(Person)
+            .where(Person.owner_user_id == user_id, Person.network_tree_id == tree.id)
+            .order_by(Person.name)
         )
     ).all()
     return [await person_response(session, person) for person in people]
@@ -238,7 +329,7 @@ async def update_person(
     session: Session,
     user_id: CurrentUser,
 ) -> PersonResponse:
-    person = await owned_person(session, user_id, person_id)
+    person = await writable_person(session, user_id, person_id)
     for field in payload.model_fields_set:
         setattr(person, field, getattr(payload, field))
     await session.commit()
@@ -248,7 +339,7 @@ async def update_person(
 
 @router.delete("/people/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_person(person_id: UUID, session: Session, user_id: CurrentUser) -> None:
-    person = await owned_person(session, user_id, person_id)
+    person = await writable_person(session, user_id, person_id)
     await session.delete(person)
     await session.commit()
 
@@ -261,13 +352,16 @@ async def delete_person(person_id: UUID, session: Session, user_id: CurrentUser)
 async def create_connection(
     payload: ConnectionCreate, session: Session, user_id: CurrentUser
 ) -> ConnectionResponse:
-    await owned_person(session, user_id, payload.person_a_id)
-    await owned_person(session, user_id, payload.person_b_id)
+    person_a = await writable_person(session, user_id, payload.person_a_id)
+    person_b = await writable_person(session, user_id, payload.person_b_id)
     if payload.person_a_id == payload.person_b_id:
         raise HTTPException(status_code=400, detail="A person cannot connect to themself.")
+    if person_a.network_tree_id != person_b.network_tree_id:
+        raise HTTPException(status_code=400, detail="People must belong to the same tree.")
     person_a_id, person_b_id = sorted([payload.person_a_id, payload.person_b_id], key=str)
     connection = Connection(
         owner_user_id=user_id,
+        network_tree_id=person_a.network_tree_id,
         person_a_id=person_a_id,
         person_b_id=person_b_id,
         label=payload.label,
@@ -292,19 +386,38 @@ async def delete_connection(connection_id: UUID, session: Session, user_id: Curr
     )
     if connection is None:
         raise HTTPException(status_code=404, detail="Connection not found.")
+    tree = await session.get(NetworkTree, connection.network_tree_id)
+    if tree is None or tree.is_read_only:
+        raise HTTPException(status_code=403, detail="This shared tree is read-only.")
     await session.delete(connection)
     await session.commit()
 
 
 @router.get("/network", response_model=NetworkResponse)
-async def get_network(session: Session, user_id: CurrentUser) -> NetworkResponse:
+async def get_network(
+    session: Session,
+    user_id: CurrentUser,
+    tree_id: UUID | None = None,
+) -> NetworkResponse:
+    tree = (
+        await require_owned_tree(session, user_id, tree_id)
+        if tree_id is not None
+        else await primary_tree(session, user_id)
+    )
     people = (
         await session.scalars(
-            select(Person).where(Person.owner_user_id == user_id).order_by(Person.name)
+            select(Person)
+            .where(Person.owner_user_id == user_id, Person.network_tree_id == tree.id)
+            .order_by(Person.name)
         )
     ).all()
     connections = (
-        await session.scalars(select(Connection).where(Connection.owner_user_id == user_id))
+        await session.scalars(
+            select(Connection).where(
+                Connection.owner_user_id == user_id,
+                Connection.network_tree_id == tree.id,
+            )
+        )
     ).all()
     return NetworkResponse(
         nodes=[await person_response(session, person) for person in people],
@@ -333,7 +446,7 @@ async def create_conversation(
     session: Session,
     user_id: CurrentUser,
 ) -> ConversationResponse:
-    person = await owned_person(session, user_id, payload.person_id)
+    person = await writable_person(session, user_id, payload.person_id)
     provider = gemini_provider(request)
     transcript = payload.transcript
     transcription_session: TranscriptionSession | None = None
@@ -544,8 +657,10 @@ async def commit_recap_draft(
         raise HTTPException(status_code=422, detail="The canonical transcript is empty.")
 
     contact = payload.contact
+    tree = await require_writable_tree(await primary_tree(session, user_id))
     person = Person(
         owner_user_id=user_id,
+        network_tree_id=tree.id,
         name=contact.name,
         alpha_score=contact.strength,
         how_met=contact.met_at or None,
@@ -573,6 +688,7 @@ async def commit_recap_draft(
         await add_organization(
             session,
             user_id,
+            tree.id,
             person.id,
             contact.company,
             "company",
@@ -693,13 +809,21 @@ async def store_chunk(
     person_id: UUID | None = None,
     conversation_id: UUID | None = None,
     note_id: UUID | None = None,
+    network_tree_id: UUID | None = None,
 ) -> None:
+    if network_tree_id is None and person_id is not None:
+        person = await session.get(Person, person_id)
+        if person is not None:
+            network_tree_id = person.network_tree_id
+    if network_tree_id is None:
+        network_tree_id = (await ensure_primary_tree(session, user_id)).id
     identity = f"{kind}:{person_id}:{conversation_id}:{note_id}:{content}"
     content_hash = hashlib.sha256(identity.encode()).hexdigest()
     embedding = await provider.embed(content)
     session.add(
         KnowledgeChunk(
             owner_user_id=user_id,
+            network_tree_id=network_tree_id,
             person_id=person_id,
             conversation_id=conversation_id,
             note_id=note_id,
@@ -730,7 +854,7 @@ async def approve_suggestion(
         raise HTTPException(status_code=404, detail="Suggestion not found.")
     if suggestion.status != SuggestionStatus.PENDING:
         raise HTTPException(status_code=409, detail="Suggestion is already resolved.")
-    person = await owned_person(session, user_id, suggestion.person_id)
+    person = await writable_person(session, user_id, suggestion.person_id)
     profile = payload.profile
     if profile.name:
         person.name = profile.name.value
@@ -771,6 +895,7 @@ async def approve_suggestion(
             await add_organization(
                 session,
                 user_id,
+                person.network_tree_id,
                 person.id,
                 organization.value,
                 organization.kind,
@@ -851,6 +976,88 @@ async def reject_suggestion(suggestion_id: UUID, session: Session, user_id: Curr
     await session.commit()
 
 
+@router.get("/network-trees", response_model=list[NetworkTreeResponse])
+async def list_network_trees(session: Session, user_id: CurrentUser) -> list[NetworkTreeResponse]:
+    trees = (
+        await session.scalars(
+            select(NetworkTree)
+            .where(NetworkTree.owner_user_id == user_id)
+            .order_by(NetworkTree.is_primary.desc(), NetworkTree.created_at)
+        )
+    ).all()
+    return [tree_response(tree) for tree in trees]
+
+
+@router.post(
+    "/network-trees/{tree_id}/export",
+    response_model=NetworkTreeExportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def export_network_tree(
+    tree_id: UUID, session: Session, user_id: CurrentUser
+) -> NetworkTreeExportResponse:
+    tree = await require_writable_tree(await require_owned_tree(session, user_id, tree_id))
+    if not tree.is_primary:
+        raise HTTPException(status_code=400, detail="Only the primary tree can be shared.")
+    snapshot = await create_snapshot(session, tree)
+    await session.commit()
+    await session.refresh(snapshot)
+    return NetworkTreeExportResponse(
+        share_token=snapshot.share_token,
+        expires_at=snapshot.expires_at,
+        snapshot_id=snapshot.id,
+    )
+
+
+@router.post(
+    "/network-trees/import",
+    response_model=NetworkTreeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_network_tree(
+    payload: NetworkTreeImportRequest,
+    request: Request,
+    session: Session,
+    user_id: CurrentUser,
+) -> NetworkTreeResponse:
+    token = payload.share_token.strip().upper()
+    snapshot = await session.scalar(
+        select(NetworkSnapshot).where(NetworkSnapshot.share_token == token)
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Share code not found.")
+    if snapshot.source_user_id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot import your own network.")
+    if snapshot.expires_at is not None and snapshot.expires_at < datetime.now(UTC):
+        raise HTTPException(status_code=410, detail="This share code has expired.")
+    if snapshot.consumed_at is not None:
+        raise HTTPException(status_code=410, detail="This share code has already been used.")
+    already = await session.scalar(
+        select(NetworkTree).where(
+            NetworkTree.owner_user_id == user_id,
+            NetworkTree.source_snapshot_id == snapshot.id,
+        )
+    )
+    if already is not None:
+        raise HTTPException(status_code=409, detail="This network is already attached.")
+    provider = getattr(request.app.state, "summary_provider", None)
+    tree = await import_snapshot(session, user_id, snapshot, provider)
+    await session.commit()
+    await session.refresh(tree)
+    return tree_response(tree)
+
+
+async def resolve_tree_ids(
+    session: AsyncSession, user_id: UUID, tree_ids: list[UUID] | None
+) -> list[UUID]:
+    if not tree_ids:
+        return [(await primary_tree(session, user_id)).id]
+    resolved: list[UUID] = []
+    for tree_id in tree_ids:
+        resolved.append((await require_owned_tree(session, user_id, tree_id)).id)
+    return resolved
+
+
 @router.post("/network/ask", response_model=NetworkAnswer)
 async def ask_network(
     payload: NetworkQuestion,
@@ -859,13 +1066,17 @@ async def ask_network(
     user_id: CurrentUser,
 ) -> NetworkAnswer:
     provider = gemini_provider(request)
+    tree_ids = await resolve_tree_ids(session, user_id, payload.tree_ids)
     query_embedding = await provider.embed(payload.question, query=True)
     distance = KnowledgeChunk.embedding.cosine_distance(query_embedding)
     rows = (
         await session.execute(
             select(KnowledgeChunk, Person.name, distance.label("distance"))
             .outerjoin(Person, KnowledgeChunk.person_id == Person.id)
-            .where(KnowledgeChunk.owner_user_id == user_id)
+            .where(
+                KnowledgeChunk.owner_user_id == user_id,
+                KnowledgeChunk.network_tree_id.in_(tree_ids),
+            )
             .order_by(distance)
             .limit(8)
         )
@@ -904,19 +1115,32 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     response_model=list[IntroductionSuggestion],
 )
 async def introduction_suggestions(
-    session: Session, user_id: CurrentUser
+    session: Session,
+    user_id: CurrentUser,
+    mode: str = "same_tree",
+    tree_id: UUID | None = None,
 ) -> list[IntroductionSuggestion]:
-    rows = (
-        await session.execute(
-            select(Person, KnowledgeChunk.embedding)
-            .join(KnowledgeChunk, KnowledgeChunk.person_id == Person.id)
-            .where(
-                Person.owner_user_id == user_id,
-                Person.is_self.is_(False),
-                KnowledgeChunk.kind == "profile",
+    primary = await primary_tree(session, user_id)
+    if mode == "cross_tree":
+        if tree_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="tree_id is required for cross-tree introductions.",
             )
-        )
-    ).all()
+        attached = await require_owned_tree(session, user_id, tree_id)
+        if attached.is_primary:
+            raise HTTPException(
+                status_code=400,
+                detail="Cross-tree introductions need an attached tree.",
+            )
+        left_rows = await _profile_rows(session, user_id, primary.id)
+        right_rows = await _profile_rows(session, user_id, attached.id)
+        pairs = ((left, right) for left in left_rows for right in right_rows)
+    else:
+        scoped_id = (await require_owned_tree(session, user_id, tree_id)).id if tree_id else primary.id
+        rows = await _profile_rows(session, user_id, scoped_id)
+        pairs = combinations(rows, 2)
+
     connected_rows = (
         await session.execute(
             select(Connection.person_a_id, Connection.person_b_id).where(
@@ -937,7 +1161,7 @@ async def introduction_suggestions(
         topic_map.setdefault(person_id, set()).add(topic.casefold())
 
     suggestions: list[IntroductionSuggestion] = []
-    for (person_a, embedding_a), (person_b, embedding_b) in combinations(rows, 2):
+    for (person_a, embedding_a), (person_b, embedding_b) in pairs:
         if frozenset((person_a.id, person_b.id)) in connected:
             continue
         similarity = cosine_similarity(list(embedding_a), list(embedding_b))
@@ -956,6 +1180,27 @@ async def introduction_suggestions(
                 person_b_name=person_b.name,
                 score=score,
                 reason=reason,
+                person_a_tree_id=person_a.network_tree_id,
+                person_b_tree_id=person_b.network_tree_id,
             )
         )
     return sorted(suggestions, key=lambda item: item.score, reverse=True)[:10]
+
+
+async def _profile_rows(
+    session: AsyncSession, user_id: UUID, tree_id: UUID
+) -> list[tuple[Person, list[float]]]:
+    return list(
+        (
+            await session.execute(
+                select(Person, KnowledgeChunk.embedding)
+                .join(KnowledgeChunk, KnowledgeChunk.person_id == Person.id)
+                .where(
+                    Person.owner_user_id == user_id,
+                    Person.network_tree_id == tree_id,
+                    Person.is_self.is_(False),
+                    KnowledgeChunk.kind == "profile",
+                )
+            )
+        ).all()
+    )

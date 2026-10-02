@@ -12,7 +12,14 @@ abstract class ContactRepository {
 }
 
 class LocalContactRepository implements ContactRepository {
-  static const _key = 'orbit.contacts.v1';
+  LocalContactRepository({this._userId});
+
+  final String? Function()? _userId;
+
+  String get _key {
+    final id = _userId?.call();
+    return id == null || id.isEmpty ? 'orbit.contacts.guest' : 'orbit.contacts.$id';
+  }
 
   @override
   Future<List<Contact>> loadAll() async {

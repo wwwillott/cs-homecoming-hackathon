@@ -15,6 +15,7 @@ class ApiRecapService implements RecapService {
       'ORBIT_API_URL',
       defaultValue: 'http://127.0.0.1:8000',
     ),
+    this._userId,
     AudioRecorder? recorder,
     http.Client? client,
   }) : _apiUri = Uri.parse(apiUrl),
@@ -25,6 +26,7 @@ class ApiRecapService implements RecapService {
   static const _chunkBytes = 3200;
 
   final Uri _apiUri;
+  final String? Function()? _userId;
   final AudioRecorder _recorder;
   final http.Client _client;
   final _progress = StreamController<RecapProgress>.broadcast();
@@ -53,16 +55,22 @@ class ApiRecapService implements RecapService {
 
   Uri get _webSocketUri {
     final scheme = _apiUri.scheme == 'https' ? 'wss' : 'ws';
+    final id = _userId?.call();
     return _apiUri.replace(
       scheme: scheme,
       path: '/api/transcriptions/stream',
-      query: null,
+      queryParameters: id == null || id.isEmpty ? const {} : {'user_id': id},
       fragment: null,
     );
   }
 
   Uri _api(String path) =>
       _apiUri.replace(path: path, query: null, fragment: null);
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        if (_userId?.call() case final id? when id.isNotEmpty) 'X-User-Id': id,
+      };
 
   @override
   Future<void> start({required RecapKind kind}) async {
@@ -276,7 +284,7 @@ class ApiRecapService implements RecapService {
 
     final response = await _client.post(
       _api('/api/transcription-sessions/$sessionId/draft'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({'kind': _kind.name}),
     );
     final body = _jsonBody(response);
@@ -294,7 +302,7 @@ class ApiRecapService implements RecapService {
     if (draft.sessionId == null) return contact;
     final response = await _client.post(
       _api('/api/transcription-sessions/${draft.sessionId}/commit'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({'contact': contact.toJson()}),
     );
     final body = _jsonBody(response);

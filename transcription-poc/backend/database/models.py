@@ -66,6 +66,8 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username: Mapped[str | None] = mapped_column(String(64), unique=True)
+    password: Mapped[str | None] = mapped_column(String(255))
     email: Mapped[str | None] = mapped_column(String(320), unique=True)
 
     people: Mapped[list[Person]] = relationship(back_populates="owner")
@@ -74,6 +76,79 @@ class User(TimestampMixin, Base):
     transcription_sessions: Mapped[list[TranscriptionSession]] = relationship(
         back_populates="owner"
     )
+    network_trees: Mapped[list[NetworkTree]] = relationship(
+        back_populates="owner",
+        foreign_keys="NetworkTree.owner_user_id",
+    )
+
+
+class NetworkTree(TimestampMixin, Base):
+    __tablename__ = "network_trees"
+    __table_args__ = (
+        Index(
+            "uq_network_trees_owner_primary",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text("is_primary"),
+        ),
+        Index("ix_network_trees_owner", "owner_user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attributed_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    label: Mapped[str] = mapped_column(String(255), nullable=False, default="My network")
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    is_read_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    source_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_snapshots.id", ondelete="SET NULL", use_alter=True),
+    )
+
+    owner: Mapped[User] = relationship(
+        back_populates="network_trees",
+        foreign_keys=[owner_user_id],
+    )
+    attributed_user: Mapped[User | None] = relationship(foreign_keys=[attributed_user_id])
+    source_snapshot: Mapped[NetworkSnapshot | None] = relationship(
+        foreign_keys=[source_snapshot_id]
+    )
+
+
+class NetworkSnapshot(TimestampMixin, Base):
+    __tablename__ = "network_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_tree_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_trees.id", ondelete="SET NULL"),
+    )
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    share_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+
+    source_user: Mapped[User] = relationship(foreign_keys=[source_user_id])
 
 
 class Person(TimestampMixin, Base):
@@ -81,8 +156,8 @@ class Person(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_people_owner_name", "owner_user_id", "name"),
         Index(
-            "uq_people_owner_self",
-            "owner_user_id",
+            "uq_people_tree_self",
+            "network_tree_id",
             unique=True,
             postgresql_where=text("is_self"),
         ),
@@ -92,6 +167,11 @@ class Person(TimestampMixin, Base):
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    network_tree_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_trees.id", ondelete="CASCADE"),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -104,6 +184,7 @@ class Person(TimestampMixin, Base):
     met_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     owner: Mapped[User] = relationship(back_populates="people")
+    network_tree: Mapped[NetworkTree] = relationship()
     contact_methods: Mapped[list[ContactMethod]] = relationship(
         back_populates="person",
         cascade="all, delete-orphan",
@@ -150,13 +231,18 @@ class ContactMethod(TimestampMixin, Base):
 class Organization(TimestampMixin, Base):
     __tablename__ = "organizations"
     __table_args__ = (
-        UniqueConstraint("owner_user_id", "name", name="uq_organizations_owner_name"),
+        UniqueConstraint("network_tree_id", "name", name="uq_organizations_tree_name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    network_tree_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_trees.id", ondelete="CASCADE"),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -222,10 +308,10 @@ class Connection(TimestampMixin, Base):
         CheckConstraint("person_a_id <> person_b_id", name="no_self_connection"),
         CheckConstraint("person_a_id < person_b_id", name="canonical_person_order"),
         UniqueConstraint(
-            "owner_user_id",
+            "network_tree_id",
             "person_a_id",
             "person_b_id",
-            name="uq_connections_owner_pair",
+            name="uq_connections_tree_pair",
         ),
         Index("ix_connections_owner_person_a", "owner_user_id", "person_a_id"),
         Index("ix_connections_owner_person_b", "owner_user_id", "person_b_id"),
@@ -235,6 +321,11 @@ class Connection(TimestampMixin, Base):
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    network_tree_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_trees.id", ondelete="CASCADE"),
         nullable=False,
     )
     person_a_id: Mapped[uuid.UUID] = mapped_column(
@@ -467,10 +558,10 @@ class KnowledgeChunk(TimestampMixin, Base):
     __tablename__ = "knowledge_chunks"
     __table_args__ = (
         UniqueConstraint(
-            "owner_user_id",
+            "network_tree_id",
             "content_hash",
             "embedding_model",
-            name="uq_knowledge_chunks_owner_hash_model",
+            name="uq_knowledge_chunks_tree_hash_model",
         ),
         Index("ix_knowledge_chunks_owner_kind", "owner_user_id", "kind"),
         Index("ix_knowledge_chunks_person", "person_id"),
@@ -482,6 +573,11 @@ class KnowledgeChunk(TimestampMixin, Base):
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    network_tree_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("network_trees.id", ondelete="CASCADE"),
         nullable=False,
     )
     person_id: Mapped[uuid.UUID | None] = mapped_column(

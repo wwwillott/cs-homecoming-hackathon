@@ -116,7 +116,17 @@ class _GrowScreenState extends State<GrowScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            if (app.isSharedMode) ...[
+                              const SizedBox(height: 8),
+                              _CrossTreeIntros(
+                                app: app,
+                                onAsk: () => _dock.currentState?.ask(
+                                  'Who should I introduce across our trees?',
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ] else
+                              const SizedBox(height: 16),
                           ],
                         ),
                       ),
@@ -182,6 +192,88 @@ class _GrowScreenState extends State<GrowScreen> {
         ],
       );
     });
+  }
+}
+
+class _CrossTreeIntros extends StatelessWidget {
+  const _CrossTreeIntros({required this.app, required this.onAsk});
+  final AppState app;
+  final VoidCallback onAsk;
+
+  @override
+  Widget build(BuildContext context) {
+    final oc = context.oc;
+    final label = app.activeSharedTree?.shortLabel ?? 'their';
+    final suggestions = app.introductionSuggestions;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.ai.withValues(alpha: context.isDark ? 0.14 : 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.ai.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, size: 18, color: AppColors.ai),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Intro ideas across your tree and $label\'s',
+                  style: context.tt.titleSmall,
+                ),
+              ),
+              TextButton(
+                onPressed: onAsk,
+                child: const Text('Ask Spruce'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Spruce can search both networks while shared mode is on.',
+            style: context.tt.bodySmall?.copyWith(color: oc.muted),
+          ),
+          if (suggestions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'No cross-tree matches yet — ask Spruce or add a few more people.',
+                style: context.tt.bodyMedium,
+              ),
+            )
+          else
+            ...suggestions.take(3).map((item) {
+              final a = item['person_a_name'] as String? ?? 'Someone';
+              final b = item['person_b_name'] as String? ?? 'Someone';
+              final reason = item['reason'] as String? ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.handshake_outlined, size: 18, color: oc.muted),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$a ↔ $b', style: context.tt.titleSmall),
+                          if (reason.isNotEmpty)
+                            Text(reason, style: context.tt.bodySmall?.copyWith(color: oc.muted)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
   }
 }
 

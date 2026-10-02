@@ -51,15 +51,18 @@ The API runs at `http://127.0.0.1:8000`. Interactive API documentation is availa
 at `http://127.0.0.1:8000/docs`.
 
 The local database uses PostgreSQL with pgvector at
-`postgresql://network:network@localhost:5432/network`. Development API requests
-default to user `00000000-0000-0000-0000-000000000001`; pass another UUID in
-`X-User-Id` to exercise network isolation. This header is intentionally a temporary
-development identity, not production authentication.
+`postgresql://network:network@localhost:5432/network`. Create an account with
+`POST /api/auth/register` or sign in with `POST /api/auth/login` (username +
+password). The Flutter app stores the returned `user_id` and sends it as
+`X-User-Id` on API calls (and `user_id` on the transcription WebSocket).
+Requests without a header still fall back to the development user
+`00000000-0000-0000-0000-000000000001`.
 
 Endpoints:
 
 - `GET /api/health`
 - `GET /api/capabilities`
+- `POST /api/auth/register` and `POST /api/auth/login` with `{ "username", "password" }`
 - `POST /api/transcriptions` with multipart field `audio`
 - `WS /api/transcriptions/stream` for live LINEAR16 audio and transcript events
 - `POST /api/transcription-sessions/{id}/draft` to generate a Flutter review draft
