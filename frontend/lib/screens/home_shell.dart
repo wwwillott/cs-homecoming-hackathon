@@ -42,18 +42,30 @@ class HomeShell extends StatelessWidget {
 
     if (wide) {
       return Scaffold(
-        body: Row(
+        body: Column(
           children: [
-            _SideNav(extended: width >= Breakpoints.extendedRail),
-            VerticalDivider(width: 1, color: context.oc.border),
-            Expanded(child: body),
+            if (app.isSharedMode) const _SharedModeChip(),
+            Expanded(
+              child: Row(
+                children: [
+                  _SideNav(extended: width >= Breakpoints.extendedRail),
+                  VerticalDivider(width: 1, color: context.oc.border),
+                  Expanded(child: body),
+                ],
+              ),
+            ),
           ],
         ),
       );
     }
 
     return Scaffold(
-      body: body,
+      body: Column(
+        children: [
+          if (app.isSharedMode) const _SharedModeChip(),
+          Expanded(child: body),
+        ],
+      ),
       floatingActionButton: app.tab == AppTab.grow
           ? null
           : const Column(
@@ -78,6 +90,42 @@ class HomeShell extends StatelessWidget {
                 label: d.shortLabel ?? d.label,
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SharedModeChip extends StatelessWidget {
+  const _SharedModeChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final label = app.activeSharedTree?.shortLabel ?? 'shared tree';
+    final primary = context.cs.primary;
+    return Material(
+      color: primary.withValues(alpha: context.isDark ? 0.22 : 0.12),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(
+            children: [
+              Icon(Icons.hub_rounded, size: 18, color: primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Shared with $label · attached tree is read-only',
+                  style: context.tt.labelLarge?.copyWith(color: context.oc.ink),
+                ),
+              ),
+              TextButton(
+                onPressed: app.leaveSharedMode,
+                child: const Text('Leave'),
+              ),
+            ],
+          ),
         ),
       ),
     );

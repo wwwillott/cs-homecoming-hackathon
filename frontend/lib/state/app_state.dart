@@ -8,8 +8,11 @@ import '../data/contact_repository.dart';
 import '../data/demo_data.dart';
 import '../graph/graph_options.dart';
 import '../models/contact.dart';
+import '../models/network_tree.dart';
 import '../models/user_mode.dart';
 import '../services/assistant_service.dart';
+import '../services/auth_service.dart';
+import '../services/network_tree_service.dart';
 import '../services/recap_service.dart';
 import '../services/streaming_recap_service.dart';
 
@@ -26,21 +29,42 @@ enum SortBy {
 }
 
 class AppState extends ChangeNotifier {
-  AppState({ContactRepository? repository, RecapService? recapService, AssistantService? assistant})
-      : repository = repository ?? LocalContactRepository(),
+  AppState({
+    ContactRepository? repository,
+    RecapService? recapService,
+    AssistantService? assistant,
+    AuthService? authService,
+    NetworkTreeService? networkTreeService,
+  })  : authService = authService ?? AuthService(),
+        _customRepository = repository,
         _injectedRecap = recapService,
-        _customAssistant = assistant;
+        _customAssistant = assistant,
+        _customNetworkTrees = networkTreeService;
 
-  final ContactRepository repository;
+  final AuthService authService;
+  final ContactRepository? _customRepository;
   final RecapService? _injectedRecap;
   final AssistantService? _customAssistant;
-  late final RecapService _liveRecap = _injectedRecap ?? ApiRecapService();
+  final NetworkTreeService? _customNetworkTrees;
+
+  late final ContactRepository repository =
+      _customRepository ?? LocalContactRepository(userId: () => userId);
+  late final NetworkTreeService networkTrees =
+      _customNetworkTrees ?? NetworkTreeService(userId: () => userId);
+  late final RecapService _liveRecap = ApiRecapService(userId: () => userId);
   late final RecapService _demoRecap = MockRecapService();
   late final ApiAssistantService _liveAssistant = ApiAssistantService(
-    networkContext: () => networkBrief(contacts: _contacts, userName: userName),
+    networkContext: () {
+      final shared = activeSharedTree;
+      final brief = networkBrief(contacts: visibleContacts, userName: userName);
+      if (shared == null) return brief;
+      return '$brief\n\nShared mode is on with ${shared.label}. '
+          'People from that attached tree are included above and marked read-only.';
+    },
+    sharedLabel: () => activeSharedTree?.shortLabel,
   );
   late final MockAssistantService _mockAssistant = MockAssistantService(
-    contacts: () => _contacts,
+    contacts: () => visibleContacts,
     mode: () => mode,
     userName: () => userName,
   );
@@ -54,12 +78,10 @@ class AppState extends ChangeNotifier {
   RecapService get recapService => _injectedRecap ?? (demoMode ? _demoRecap : _liveRecap);
   final navigatorKey = GlobalKey<NavigatorState>();
 
-  static const _kOnboarded = 'orbit.onboarded';
-  static const _kMode = 'orbit.mode';
+  static const _kSessionUserId = 'orbit.session.userId';
+  static const _kSessionUsername = 'orbit.session.username';
   static const _kTheme = 'orbit.theme';
-  static const _kName = 'orbit.userName';
   static const _kDemo = 'orbit.demoMode';
-  static const _kTreeLevel = 'orbit.treeGoalsSeen';
   static const _firstTreeGoals = [5, 10, 15, 25, 30];
 
   /// Network-size goals that grow the tree: 5, 10, 15, 25, 30, then every 10.
@@ -71,15 +93,43 @@ class AppState extends ChangeNotifier {
   bool onboarded = false;
   bool demoMode = false;
   int assistantEpoch = 0;
+  String? userId;
+  String? username;
   UserMode mode = UserMode.seeker;
   ThemeMode themeMode = ThemeMode.system;
   String userName = '';
 
+  bool get isSignedIn => userId != null && userId!.isNotEmpty;
+
   List<Contact> _contacts = [];
   Map<String, Contact> _byId = {};
+  List<NetworkTree> trees = [];
+  NetworkTree? activeSharedTree;
+  List<Contact> _attachedContacts = [];
+  List<Map<String, dynamic>> introductionSuggestions = [];
 
   List<Contact> get contacts => _contacts;
-  Contact? byId(String? id) => id == null ? null : _byId[id];
+  List<Contact> get attachedContacts => isSharedMode ? _attachedContacts : const [];
+  List<Contact> get visibleContacts => [..._contacts, ...attachedContacts];
+  bool get isSharedMode => activeSharedTree != null;
+  Contact? byId(String? id) {
+    if (id == null) return null;
+    return _byId[id] ?? _attachedById[id];
+  }
+
+  Map<String, Contact> get _attachedById => {for (final c in attachedContacts) c.id: c};
+
+  List<String> askTreeIds() => [
+        if (primaryTree != null) primaryTree!.id,
+        if (activeSharedTree != null) activeSharedTree!.id,
+      ];
+
+  NetworkTree? get primaryTree {
+    for (final tree in trees) {
+      if (tree.isPrimary) return tree;
+    }
+    return null;
+  }
 
   int _treeLevelSeen = 0;
 
@@ -111,7 +161,9 @@ class AppState extends ChangeNotifier {
   void _setTreeLevelSeen(int level) {
     _treeLevelSeen = math.max(level, 0);
     notifyListeners();
-    SharedPreferences.getInstance().then((p) => p.setInt(_kTreeLevel, _treeLevelSeen));
+    if (isSignedIn) {
+      SharedPreferences.getInstance().then((p) => p.setInt(_pref('treeGoalsSeen'), _treeLevelSeen));
+    }
   }
 
   AppTab tab = AppTab.home;
@@ -123,20 +175,31 @@ class AppState extends ChangeNotifier {
   String? graphFocusId;
   bool assistantOpen = false;
 
+  String _pref(String key) => 'orbit.$userId.$key';
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    onboarded = prefs.getBool(_kOnboarded) ?? false;
-    mode = UserMode.fromName(prefs.getString(_kMode));
     themeMode = ThemeMode.values.firstWhere(
       (m) => m.name == prefs.getString(_kTheme),
       orElse: () => ThemeMode.system,
     );
-    userName = prefs.getString(_kName) ?? '';
     demoMode = prefs.getBool(_kDemo) ?? false;
-    _setContacts(await repository.loadAll());
-    _treeLevelSeen = prefs.getInt(_kTreeLevel) ?? treeLevel;
+    userId = prefs.getString(_kSessionUserId);
+    username = prefs.getString(_kSessionUsername);
+    if (isSignedIn) {
+      await _loadUserData(prefs);
+      await refreshTrees();
+    }
     loaded = true;
     notifyListeners();
+  }
+
+  Future<void> _loadUserData(SharedPreferences prefs) async {
+    onboarded = prefs.getBool(_pref('onboarded')) ?? false;
+    mode = UserMode.fromName(prefs.getString(_pref('mode')));
+    userName = prefs.getString(_pref('userName')) ?? '';
+    _setContacts(await repository.loadAll());
+    _treeLevelSeen = prefs.getInt(_pref('treeGoalsSeen')) ?? treeLevel;
   }
 
   void _setContacts(List<Contact> list) {
@@ -145,6 +208,47 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _persist() => repository.saveAll(_contacts);
+
+  Future<void> signIn(AuthSession session) async {
+    userId = session.userId;
+    username = session.username;
+    selectedContactId = null;
+    graphFocusId = null;
+    tab = AppTab.home;
+    assistantOpen = false;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kSessionUserId, session.userId);
+    await prefs.setString(_kSessionUsername, session.username);
+    await _loadUserData(prefs);
+    await refreshTrees();
+    notifyListeners();
+  }
+
+  Future<void> signOut() async {
+    userId = null;
+    username = null;
+    onboarded = false;
+    userName = '';
+    mode = UserMode.seeker;
+    selectedContactId = null;
+    graphFocusId = null;
+    assistantOpen = false;
+    leaveSharedMode();
+    trees = [];
+    _attachedContacts = [];
+    introductionSuggestions = [];
+    _setContacts([]);
+    _treeLevelSeen = 0;
+    assistantEpoch++;
+    assistant.reset();
+    tab = AppTab.home;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kSessionUserId);
+    await prefs.remove(_kSessionUsername);
+    notifyListeners();
+  }
 
   Future<void> completeOnboarding({
     required UserMode mode,
@@ -162,24 +266,24 @@ class AppState extends ChangeNotifier {
     tab = AppTab.home;
     _setTreeLevelSeen(withDemoData ? treeLevel - 1 : treeLevel);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kOnboarded, true);
-    await prefs.setString(_kMode, mode.name);
-    await prefs.setString(_kName, userName);
+    await prefs.setBool(_pref('onboarded'), true);
+    await prefs.setString(_pref('mode'), mode.name);
+    await prefs.setString(_pref('userName'), userName);
     await _persist();
   }
 
   Future<void> resetApp() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    onboarded = false;
+    if (isSignedIn) {
+      await prefs.remove(_pref('onboarded'));
+      await prefs.remove(_pref('mode'));
+      await prefs.remove(_pref('userName'));
+      await prefs.remove(_pref('treeGoalsSeen'));
+      await prefs.remove('orbit.contacts.$userId');
+    }
+    await prefs.remove(_kDemo);
     demoMode = false;
-    assistantEpoch++;
-    selectedContactId = null;
-    graphFocusId = null;
-    _setContacts([]);
-    _treeLevelSeen = 0;
-    tab = AppTab.home;
-    notifyListeners();
+    await signOut();
   }
 
   /// The sample network leaves its last growth unwatched so the reveal can be demoed.
@@ -195,7 +299,9 @@ class AppState extends ChangeNotifier {
     if (mode == value) return;
     mode = value;
     notifyListeners();
-    SharedPreferences.getInstance().then((p) => p.setString(_kMode, value.name));
+    if (isSignedIn) {
+      SharedPreferences.getInstance().then((p) => p.setString(_pref('mode'), value.name));
+    }
   }
 
   void setDemoMode(bool value) {
@@ -253,6 +359,14 @@ class AppState extends ChangeNotifier {
   }
 
   Contact upsert(Contact contact) {
+    if (contact.readOnly) {
+      final index = _attachedContacts.indexWhere((c) => c.id == contact.id);
+      if (index != -1) {
+        _attachedContacts = [..._attachedContacts]..[index] = contact;
+        notifyListeners();
+      }
+      return contact;
+    }
     final index = _contacts.indexWhere((c) => c.id == contact.id);
     var saved = contact;
     if (index == -1) {
@@ -271,6 +385,7 @@ class AppState extends ChangeNotifier {
   }
 
   void delete(String id) {
+    if (_attachedById.containsKey(id)) return;
     _setContacts(_contacts
         .where((c) => c.id != id)
         .map((c) => c.connectedIds.contains(id) || c.introducedById == id
@@ -305,11 +420,11 @@ class AppState extends ChangeNotifier {
     final c = byId(id);
     final out = <String>{};
     if (c == null) return out;
-    out.addAll(c.connectedIds.where(_byId.containsKey));
-    if (c.introducedById != null && _byId.containsKey(c.introducedById)) {
+    out.addAll(c.connectedIds.where((other) => byId(other) != null));
+    if (c.introducedById != null && byId(c.introducedById) != null) {
       out.add(c.introducedById!);
     }
-    for (final other in _contacts) {
+    for (final other in visibleContacts) {
       if (other.connectedIds.contains(id) || other.introducedById == id) {
         out.add(other.id);
       }
@@ -348,6 +463,103 @@ class AppState extends ChangeNotifier {
     return set.toList()..sort();
   }
 
+  Future<void> refreshTrees() async {
+    if (!isSignedIn) return;
+    try {
+      trees = await networkTrees.listTrees();
+      if (activeSharedTree != null) {
+        final match = trees.where((tree) => tree.id == activeSharedTree!.id);
+        if (match.isEmpty) {
+          leaveSharedMode();
+        } else {
+          activeSharedTree = match.first;
+          _attachedContacts = await networkTrees.loadTreeContacts(activeSharedTree!.id);
+          await refreshIntroductionSuggestions();
+        }
+      }
+      notifyListeners();
+    } catch (_) {
+      // Sharing stays local-only when the backend is offline.
+    }
+  }
+
+  Future<NetworkShareCode> exportPrimaryTree() async {
+    if (!isSignedIn) {
+      throw StateError('Sign in to share your network.');
+    }
+    for (final contact in _contacts) {
+      try {
+        await networkTrees.syncContact(contact);
+      } catch (_) {}
+    }
+    await refreshTrees();
+    final tree = primaryTree;
+    if (tree == null) {
+      throw StateError('Your network is not ready to share yet.');
+    }
+    return networkTrees.exportTree(tree.id);
+  }
+
+  Future<void> joinSharedTree(String shareToken) async {
+    final tree = await networkTrees.importTree(shareToken);
+    await enterSharedMode(tree);
+  }
+
+  Future<void> enterSharedMode(NetworkTree tree) async {
+    activeSharedTree = tree;
+    _attachedContacts = await networkTrees.loadTreeContacts(tree.id);
+    await refreshTrees();
+    await refreshIntroductionSuggestions();
+    notifyListeners();
+  }
+
+  void leaveSharedMode() {
+    if (activeSharedTree == null && _attachedContacts.isEmpty) return;
+    activeSharedTree = null;
+    _attachedContacts = [];
+    introductionSuggestions = [];
+    if (graphFocusId != null && !_byId.containsKey(graphFocusId)) {
+      graphFocusId = null;
+    }
+    notifyListeners();
+  }
+
+  /// Test helper for dual-tree UI without the backend.
+  void attachSharedTreeForTest({
+    required NetworkTree tree,
+    required List<Contact> contacts,
+  }) {
+    trees = [
+      if (primaryTree == null)
+        const NetworkTree(
+          id: 'primary',
+          label: 'My network',
+          isPrimary: true,
+          isReadOnly: false,
+        ),
+      ...trees.where((item) => item.id != tree.id),
+      tree,
+    ];
+    activeSharedTree = tree;
+    _attachedContacts = contacts;
+    notifyListeners();
+  }
+
+  Future<void> refreshIntroductionSuggestions() async {
+    if (activeSharedTree == null) {
+      introductionSuggestions = [];
+      return;
+    }
+    try {
+      introductionSuggestions = await networkTrees.introductionSuggestions(
+        mode: 'cross_tree',
+        treeId: activeSharedTree!.id,
+      );
+    } catch (_) {
+      introductionSuggestions = [];
+    }
+  }
+
   @override
   void dispose() {
     if (_injectedRecap != null) {
@@ -356,6 +568,8 @@ class AppState extends ChangeNotifier {
       unawaited(_liveRecap.dispose());
       unawaited(_demoRecap.dispose());
     }
+    authService.dispose();
+    networkTrees.dispose();
     super.dispose();
   }
 }

@@ -20,6 +20,7 @@ from models import (
     SummaryRequest,
     TranscriptionResponse,
 )
+from auth import router as auth_router
 from network_api import router as network_router
 from providers import (
     SummaryProvider,
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(auth_router)
     app.include_router(network_router)
     app.include_router(streaming_router)
     app.include_router(assistant_router)

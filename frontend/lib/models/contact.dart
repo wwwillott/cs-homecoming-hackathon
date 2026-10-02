@@ -87,6 +87,7 @@ class Contact {
     this.connectedIds = const [],
     this.favorite = false,
     this.createdAt,
+    this.readOnly = false,
   });
 
   final String id;
@@ -127,6 +128,7 @@ class Contact {
   final List<String> connectedIds;
   final bool favorite;
   final DateTime? createdAt;
+  final bool readOnly;
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
@@ -177,6 +179,7 @@ class Contact {
     List<String>? connectedIds,
     bool? favorite,
     DateTime? createdAt,
+    bool? readOnly,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -206,6 +209,7 @@ class Contact {
       connectedIds: connectedIds ?? this.connectedIds,
       favorite: favorite ?? this.favorite,
       createdAt: createdAt ?? this.createdAt,
+      readOnly: readOnly ?? this.readOnly,
     );
   }
 
@@ -274,6 +278,7 @@ class Contact {
       connectedIds: strings('connectedIds'),
       favorite: json['favorite'] as bool? ?? false,
       createdAt: date('createdAt'),
+      readOnly: json['readOnly'] as bool? ?? false,
     );
   }
 }

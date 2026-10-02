@@ -60,6 +60,7 @@ class GraphView extends StatefulWidget {
     required this.onFocusChanged,
     this.controller,
     this.fitPadding = const EdgeInsets.all(48),
+    this.anchorLabel = 'You',
   });
 
   final List<Contact> contacts;
@@ -70,6 +71,7 @@ class GraphView extends StatefulWidget {
   final ValueChanged<String?> onFocusChanged;
   final GraphViewController? controller;
   final EdgeInsets fitPadding;
+  final String anchorLabel;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -125,7 +127,8 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
         old.colorBy != widget.colorBy ||
         old.sizeBy != widget.sizeBy ||
         old.showPeerLinks != widget.showPeerLinks ||
-        old.focusId != widget.focusId) {
+        old.focusId != widget.focusId ||
+        old.anchorLabel != widget.anchorLabel) {
       _sync();
     }
   }
@@ -775,9 +778,11 @@ class _GraphPainter extends CustomPainter {
           ..strokeWidth = 3
           ..color = oc.graphBackground,
       );
+      final raw = state.widget.anchorLabel.trim();
+      final label = raw.isEmpty ? 'You' : raw;
       final tp = _text(
-        'you',
-        'You',
+        'you-$label',
+        label.length <= 10 ? label : '${label.substring(0, 9)}...',
         const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
       );
       tp.paint(canvas, n.pos - Offset(tp.width / 2, tp.height / 2));

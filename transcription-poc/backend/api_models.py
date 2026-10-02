@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -61,10 +63,12 @@ class PersonResponse(BaseModel):
     where_met: str | None
     met_at: datetime | None
     is_self: bool
+    network_tree_id: UUID | None = None
     contact_methods: list[ContactMethodResponse] = Field(default_factory=list)
     organizations: list[OrganizationResponse] = Field(default_factory=list)
     goals: list[str] = Field(default_factory=list)
     interests: list[str] = Field(default_factory=list)
+    notes: list[NoteResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -158,6 +162,7 @@ class NoteResponse(BaseModel):
 
 class NetworkQuestion(BaseModel):
     question: str = Field(min_length=1, max_length=2_000)
+    tree_ids: list[UUID] | None = None
 
 
 class NetworkCitation(BaseModel):
@@ -180,3 +185,35 @@ class IntroductionSuggestion(BaseModel):
     person_b_name: str
     score: float
     reason: str
+    person_a_tree_id: UUID | None = None
+    person_b_tree_id: UUID | None = None
+
+
+class NetworkTreeResponse(BaseModel):
+    id: UUID
+    label: str
+    is_primary: bool
+    is_read_only: bool
+    attributed_user_id: UUID | None
+    source_snapshot_id: UUID | None
+    created_at: datetime
+
+
+class NetworkTreeExportResponse(BaseModel):
+    share_token: str
+    expires_at: datetime | None
+    snapshot_id: UUID
+
+
+class NetworkTreeImportRequest(BaseModel):
+    share_token: str = Field(min_length=4, max_length=64)
+
+
+class AuthCredentials(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AuthResponse(BaseModel):
+    user_id: UUID
+    username: str

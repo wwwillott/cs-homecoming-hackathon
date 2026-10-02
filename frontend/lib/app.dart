@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/auth_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/onboarding_screen.dart';
 import 'state/app_state.dart';
@@ -37,13 +38,19 @@ class _RootGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final onboarded = AppScope.of(context).onboarded;
+    final app = AppScope.of(context);
+    final Widget child;
+    if (!app.isSignedIn) {
+      child = const AuthScreen(key: ValueKey('auth'));
+    } else if (!app.onboarded) {
+      child = const OnboardingScreen(key: ValueKey('onboarding'));
+    } else {
+      child = const HomeShell(key: ValueKey('shell'));
+    }
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 450),
       switchInCurve: Curves.easeOutCubic,
-      child: onboarded
-          ? const HomeShell(key: ValueKey('shell'))
-          : const OnboardingScreen(key: ValueKey('onboarding')),
+      child: child,
     );
   }
 }
