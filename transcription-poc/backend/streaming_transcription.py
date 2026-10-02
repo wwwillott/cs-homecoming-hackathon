@@ -265,6 +265,8 @@ async def stream_transcription(websocket: WebSocket) -> None:
             )
             final_sequence = await next_segment_sequence(db, transcription_session.id)
             existing_transcript = await canonical_transcript(db, transcription_session.id)
+    except WebSocketDisconnect:
+        return
     except (HTTPException, ValueError, KeyError, json.JSONDecodeError) as error:
         message = error.detail if isinstance(error, HTTPException) else str(error)
         await websocket.send_json(TranscriptEvent(type="error", message=message).as_dict())

@@ -65,6 +65,22 @@ def test_health_and_unconfigured_capabilities() -> None:
         }
 
 
+def test_flutter_development_origin_passes_cors_preflight() -> None:
+    app = create_app(Settings(google_cloud_project=None))
+    with TestClient(app) as client:
+        response = client.options(
+            "/api/transcription-sessions/00000000-0000-0000-0000-000000000001/draft",
+            headers={
+                "Origin": "http://localhost:5174",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5174"
+
+
 def test_transcription_normalizes_response_and_removes_temporary_file() -> None:
     app = create_app(Settings(google_cloud_project=None))
     provider = FakeTranscriptionProvider()

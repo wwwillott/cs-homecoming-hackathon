@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     gemini_summary_model: str = "gemini-3.5-flash"
     gemini_embedding_model: str = "gemini-embedding-2"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origin_regex: str | None = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
     max_upload_mb: int = 15
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -76,8 +77,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=active_settings.parsed_cors_origins,
+        allow_origin_regex=active_settings.cors_origin_regex,
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["*"],
         allow_headers=["*"],
     )
     app.include_router(network_router)
