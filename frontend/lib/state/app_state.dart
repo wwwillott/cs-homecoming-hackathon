@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,6 +10,7 @@ import '../models/contact.dart';
 import '../models/user_mode.dart';
 import '../services/assistant_service.dart';
 import '../services/recap_service.dart';
+import '../services/streaming_recap_service.dart';
 
 enum AppTab { home, people, network, grow }
 
@@ -24,14 +27,20 @@ enum SortBy {
 class AppState extends ChangeNotifier {
   AppState({ContactRepository? repository, RecapService? recapService, AssistantService? assistant})
       : repository = repository ?? LocalContactRepository(),
-        recapService = recapService ?? MockRecapService(),
+        recapService = recapService ?? ApiRecapService(),
         _customAssistant = assistant;
 
   final ContactRepository repository;
   final RecapService recapService;
   final AssistantService? _customAssistant;
   late final AssistantService assistant = _customAssistant ??
-      MockAssistantService(contacts: () => _contacts, mode: () => mode, userName: () => userName);
+      ApiAssistantService(
+        fallback: MockAssistantService(
+          contacts: () => _contacts,
+          mode: () => mode,
+          userName: () => userName,
+        ),
+      );
   final navigatorKey = GlobalKey<NavigatorState>();
 
   static const _kOnboarded = 'orbit.onboarded';
@@ -228,9 +237,13 @@ class AppState extends ChangeNotifier {
     final out = <String>{};
     if (c == null) return out;
     out.addAll(c.connectedIds.where(_byId.containsKey));
-    if (c.introducedById != null && _byId.containsKey(c.introducedById)) out.add(c.introducedById!);
+    if (c.introducedById != null && _byId.containsKey(c.introducedById)) {
+      out.add(c.introducedById!);
+    }
     for (final other in _contacts) {
-      if (other.connectedIds.contains(id) || other.introducedById == id) out.add(other.id);
+      if (other.connectedIds.contains(id) || other.introducedById == id) {
+        out.add(other.id);
+      }
     }
     out.remove(id);
     return out;
@@ -269,6 +282,12 @@ class AppState extends ChangeNotifier {
   List<String> get allCompanies {
     final set = <String>{for (final c in _contacts) if (c.company.isNotEmpty) c.company};
     return set.toList()..sort();
+  }
+
+  @override
+  void dispose() {
+    unawaited(recapService.dispose());
+    super.dispose();
   }
 }
 

@@ -31,6 +31,7 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
   late List<String> _tags;
   late bool _canRefer;
   bool _showTranscript = false;
+  bool _saving = false;
   String? _nameError;
 
   static const _textFields = [
@@ -53,7 +54,9 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
       final value = f == 'skills' ? _base.skills.join(', ') : (json[f] as String? ?? '');
       final controller = TextEditingController(text: value);
       controller.addListener(() {
-        if (_ai.contains(f) && controller.text != value) setState(() => _ai.remove(f));
+        if (_ai.contains(f) && controller.text != value) {
+          setState(() => _ai.remove(f));
+        }
       });
       _c[f] = controller;
     }
@@ -80,7 +83,8 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
 
   String _t(String f) => _c[f]!.text.trim();
 
-  void _save() {
+  Future<void> _save() async {
+    if (_saving) return;
     if (_t('name').isEmpty) {
       setState(() => _nameError = 'Add a name to save');
       return;
@@ -117,6 +121,19 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
       if (intro != null && !contact.connectedIds.contains(intro.id)) {
         contact = contact.copyWith(connectedIds: [...contact.connectedIds, intro.id]);
       }
+    }
+    if (widget.draft != null) {
+      setState(() => _saving = true);
+      try {
+        contact = await app.recapService.commitDraft(draft: widget.draft!, contact: contact);
+      } catch (error) {
+        if (!mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text('Could not save the recap: $error')));
+        setState(() => _saving = false);
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _saving = false);
     }
     final saved = app.upsert(contact);
     Navigator.of(context).pop(saved);
@@ -203,8 +220,8 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: FilledButton(
-                onPressed: _save,
-                child: Text(_isDraft ? 'Add to network' : 'Save'),
+                onPressed: _saving ? null : _save,
+                child: Text(_saving ? 'Saving…' : (_isDraft ? 'Add to network' : 'Save')),
               ),
             ),
           ],
@@ -306,7 +323,7 @@ class _ContactEditorScreenState extends State<ContactEditorScreen> {
                   ]),
                   const SizedBox(height: 8),
                   FilledButton.icon(
-                    onPressed: _save,
+                    onPressed: _saving ? null : _save,
                     icon: Icon(_isDraft ? Icons.person_add_alt_1_rounded : Icons.check_rounded),
                     label: Text(_isDraft ? 'Add ${_t('name').isEmpty ? 'to network' : _t('name').split(' ').first}' : 'Save'),
                   ),

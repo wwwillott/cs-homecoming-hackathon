@@ -1,0 +1,86 @@
+:root {
+  color: #172033;
+  background: #f4f6f9;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(100% - 2rem, 760px);
+  margin: 2rem auto;
+}
+
+section {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #ccd3df;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-weight: 650;
+}
+
+select,
+input,
+textarea,
+button {
+  width: 100%;
+  padding: 0.75rem;
+  font: inherit;
+}
+
+textarea {
+  margin-bottom: 0.75rem;
+  resize: vertical;
+}
+
+button {
+  border: 0;
+  border-radius: 0.35rem;
+  background: #2457d6;
+  color: white;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.hint {
+  color: #596579;
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #b42318;
+}
+
+progress {
+  width: 100%;
+}
+
+pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
