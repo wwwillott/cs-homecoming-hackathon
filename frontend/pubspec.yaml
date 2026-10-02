@@ -62,6 +62,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  assets:
+    - assets/images/network_tree.svg
+
   fonts:
     - family: Inter
       fonts:

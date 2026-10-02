@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="72 32 460 410">
+  <defs>
+    <linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#ede6d5"/>
+      <stop offset="1" stop-color="#ded6bd"/>
+    </linearGradient>
+
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#9b6e50"/>
+      <stop offset=".48" stop-color="#bb8962"/>
+      <stop offset="1" stop-color="#835c45"/>
+    </linearGradient>
+
+    <linearGradient id="foliage0" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#82aa7d"/>
+      <stop offset="1" stop-color="#507f61"/>
+    </linearGradient>
+    <linearGradient id="foliage1" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#a1c28b"/>
+      <stop offset="1" stop-color="#66986f"/>
+    </linearGradient>
+    <linearGradient id="foliage2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#bfd29b"/>
+      <stop offset="1" stop-color="#85ad7b"/>
+    </linearGradient>
+
+    <path id="crown0" d="M-65 8C-80-9-72-31-54-38C-57-58-37-72-18-65C-3-84 26-79 34-60C56-64 76-45 68-24C86-6 73 18 54 22C40 42 18 38 5 32C-17 43-39 33-43 23C-54 27-66 20-65 8Z"/>
+    <path id="crown1" d="M-64 8C-80-12-65-36-48-38C-46-61-20-74-2-64C17-82 44-70 48-50C73-45 78-23 65-8C76 11 55 32 39 27C24 43 0 40-12 29C-35 40-57 29-57 19C-63 18-66 15-64 8Z"/>
+    <path id="crown2" d="M-65 3C-72-18-57-38-41-39C-44-59-18-72 0-59C16-76 39-64 42-47C65-51 81-25 67-9C82 8 62 31 44 27C33 43 11 40 0 30C-20 42-41 32-45 22C-57 26-69 16-65 3Z"/>
+  </defs>
+
+  <g transform="translate(300 400)">
+    <ellipse cy="8" rx="157" ry="17" fill="#b8ad8f" opacity=".09"/>
+    <path d="M-148 0C-129-18-69-23-10-22C55-23 113-16 142-3C162 7 129 18 74 21C14 27-74 25-120 16C-140 12-156 6-148 0Z" fill="url(#soil)"/>
+    <path d="M-128-4C-83-15-53-14-24-15M65-12Q96-10 112-5" fill="none" stroke="#fffaf0" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+    <ellipse cy="1" rx="46" ry="8" fill="#958c70" opacity=".12"/>
+    <path d="M-86-4Q-91-17-98-19M-87-4Q-84-20-78-24M-85-5Q-79-14-73-14M96 1Q100-12 108-15M96 1Q94-9 90-12" fill="none" stroke="#8d9c74" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(300 397)">
+    <g fill="none" stroke="url(#wood)" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-3-143Q-32-146-56-177" stroke-width="10"/>
+      <path d="M3-181Q25-185 43-212" stroke-width="8"/>
+      <path d="M0-95C-26-120-51-142-82-189" stroke-width="17"/>
+      <path d="M6-127C29-136 55-150 75-197" stroke-width="14"/>
+      <path d="M-38-145Q-79-145-115-186M-58-164Q-59-203-76-224" stroke-width="10"/>
+      <path d="M37-150Q78-147 114-189M44-157Q42-200 63-224" stroke-width="10"/>
+      <path d="M-63-158Q-118-150-151-195M-90-171Q-105-197-100-222" stroke-width="8"/>
+      <path d="M66-162Q111-145 151-194M102-168Q96-198 114-228" stroke-width="8"/>
+      <path d="M-103-169Q-158-159-190-207M-144-177Q-147-209-167-226" stroke-width="6"/>
+      <path d="M103-170Q160-165 192-208M147-180Q151-212 165-236" stroke-width="6"/>
+    </g>
+
+    <g fill="none" stroke="#e7b98b" stroke-linecap="round" opacity=".28">
+      <path d="M0-95C-26-120-51-142-82-189" stroke-width="2.5"/>
+      <path d="M6-127C29-136 55-150 75-197" stroke-width="2.2"/>
+      <path d="M-38-145Q-79-145-115-186" stroke-width="1.8"/>
+      <path d="M37-150Q78-147 114-189" stroke-width="1.8"/>
+    </g>
+
+    <path d="M-27 0C-11-15-13-45-10-77C-8-109-16-147-6-178C1-199 5-219 1-241C15-220 11-193 7-171C1-145 8-121 12-96C18-62 12-23 30-2C13 5-8 6-27 0Z" fill="url(#wood)"/>
+    <path d="M-5-9C1-32-3-52 0-76C3-102-6-122-4-144" fill="none" stroke="#ecc297" stroke-width="3" stroke-linecap="round" opacity=".45"/>
+    <path d="M12-13Q7-33 9-48M-5-169Q4-193 3-213" fill="none" stroke="#684c3d" stroke-width="2.2" stroke-linecap="round" opacity=".22"/>
+    <path d="M-13-2Q-25 2-35 0M17-1Q28 4 36 2" fill="none" stroke="url(#wood)" stroke-width="5" stroke-linecap="round"/>
+
+    <g transform="translate(-159 -211) scale(.75)"><use href="#crown1" fill="url(#foliage0)"/></g>
+    <g transform="translate(157 -209) scale(.78)"><use href="#crown2" fill="url(#foliage1)"/></g>
+    <g transform="translate(-108 -266) scale(.80)"><use href="#crown2" fill="url(#foliage1)"/></g>
+    <g transform="translate(111 -262) scale(.81)"><use href="#crown0" fill="url(#foliage2)"/></g>
+    <g transform="translate(5 -273) scale(.98)"><use href="#crown1" fill="url(#foliage2)"/></g>
+
+    <g transform="translate(-115 -177) scale(.73)"><use href="#crown2" fill="url(#foliage0)"/></g>
+    <g transform="translate(115 -181) scale(.76)"><use href="#crown0" fill="url(#foliage0)"/></g>
+    <g transform="translate(64 -244) scale(.94)"><use href="#crown1" fill="url(#foliage1)"/></g>
+    <g transform="translate(-69 -250) scale(.91)"><use href="#crown0" fill="url(#foliage2)"/></g>
+
+    <g transform="translate(-85 -196) scale(.86)"><use href="#crown0" fill="url(#foliage0)"/></g>
+    <g transform="translate(84 -192) scale(.84)"><use href="#crown1" fill="url(#foliage1)"/></g>
+    <g transform="translate(-19 -248) scale(.85)"><use href="#crown2" fill="url(#foliage2)"/></g>
+
+    <g transform="translate(-44 -174) scale(.67)"><use href="#crown1" fill="url(#foliage1)"/></g>
+    <g transform="translate(45 -181) scale(.65)"><use href="#crown2" fill="url(#foliage0)"/></g>
+    <g transform="translate(0 -224) scale(.73)"><use href="#crown0" fill="url(#foliage2)"/></g>
+
+    <g transform="translate(-103 -151) rotate(-53) scale(.58)">
+      <path d="M0 0C-20-3-31-19-26-39C-6-36 8-21 0 0Z" fill="#a9c981"/>
+      <path d="M0 0Q-11-14-21-31" fill="none" stroke="#739c64" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>
+    </g>
+    <g transform="translate(104 -151) rotate(122) scale(.57)">
+      <path d="M0 0C-20-3-31-19-26-39C-6-36 8-21 0 0Z" fill="#689d70"/>
+      <path d="M0 0Q-11-14-21-31" fill="none" stroke="#426f54" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>
+    </g>
+
+    <g transform="translate(-140 -231)">
+      <path d="M0-2C-10-14-14-1-4 1C-15 7-5 15 1 5C7 16 15 5 5 1C15-5 4-14 0-2Z" fill="#faf3d5" opacity=".92"/>
+      <circle r="2.3" fill="#d5ab60"/>
+    </g>
+    <g transform="translate(98 -261) rotate(21)">
+      <path d="M0-2C-10-14-14-1-4 1C-15 7-5 15 1 5C7 16 15 5 5 1C15-5 4-14 0-2Z" fill="#faf3d5" opacity=".92"/>
+      <circle r="2.3" fill="#d5ab60"/>
+    </g>
+    <g transform="translate(45 -207) rotate(42)">
+      <path d="M0-2C-10-14-14-1-4 1C-15 7-5 15 1 5C7 16 15 5 5 1C15-5 4-14 0-2Z" fill="#faf3d5" opacity=".92"/>
+      <circle r="2.3" fill="#d5ab60"/>
+    </g>
+  </g>
+
+  <g opacity=".5">
+    <path d="M130 254Q130 260 124 260Q130 260 130 266Q130 260 136 260Q130 260 130 254Z" fill="#c3ad6a"/>
+    <circle cx="465" cy="296" r="2.5" fill="#c5b67d"/>
+    <path d="M477 142Q477 150 469 150Q477 150 477 158Q477 150 485 150Q477 150 477 142Z" fill="#c3ad6a"/>
+  </g>
+</svg>

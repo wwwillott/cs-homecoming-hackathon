@@ -274,11 +274,6 @@ class AppState extends ChangeNotifier {
     return (counts.keys.toList()..sort((a, b) => counts[b]!.compareTo(counts[a]!)));
   }
 
-  List<String> get allEvents {
-    final set = <String>{for (final c in _contacts) if (c.metAt.isNotEmpty) c.metAt};
-    return set.toList()..sort();
-  }
-
   List<String> get allCompanies {
     final set = <String>{for (final c in _contacts) if (c.company.isNotEmpty) c.company};
     return set.toList()..sort();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -24,11 +25,37 @@ abstract class AssistantService {
 
   /// Streams the assistant's reply to the last user message in [history].
   Stream<String> reply(List<ChatMessage> history);
+
+  /// Drops the current conversation so the next message starts a new session.
+  void reset();
+}
+
+/// Uses the on-device assistant while demo mode is on, and the Agents API otherwise.
+class ModeAssistantService implements AssistantService {
+  ModeAssistantService({required this.demoMode, required this.live, required this.demo});
+
+  final bool Function() demoMode;
+  final AssistantService live;
+  final AssistantService demo;
+
+  AssistantService get _active => demoMode() ? demo : live;
+
+  @override
+  Future<List<String>> suggestedPrompts() => _active.suggestedPrompts();
+
+  @override
+  Stream<String> reply(List<ChatMessage> history) => _active.reply(history);
+
+  @override
+  void reset() {
+    live.reset();
+    demo.reset();
+  }
 }
 
 class ApiAssistantService implements AssistantService {
   ApiAssistantService({
-    required this.fallback,
+    required this.networkContext,
     String apiUrl = const String.fromEnvironment(
       'ORBIT_API_URL',
       defaultValue: 'http://127.0.0.1:8000',
@@ -37,35 +64,101 @@ class ApiAssistantService implements AssistantService {
   })  : _apiUri = Uri.parse(apiUrl),
         _client = client ?? http.Client();
 
-  final AssistantService fallback;
+  final String Function() networkContext;
   final Uri _apiUri;
   final http.Client _client;
+  String? _sessionId;
+
+  Uri _uri(String path) => _apiUri.replace(path: path, query: null, fragment: null);
 
   @override
-  Future<List<String>> suggestedPrompts() => fallback.suggestedPrompts();
+  Future<List<String>> suggestedPrompts() async {
+    try {
+      final response = await _client.get(_uri('/api/assistant/prompts'));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        final prompts = [
+          for (final item in body['prompts'] as List? ?? const [])
+            if (item is String && item.trim().isNotEmpty) item,
+        ];
+        if (prompts.isNotEmpty) return prompts;
+      }
+    } catch (_) {
+      // The chip still shows so a failed backend is visible when they send it.
+    }
+    return const ['Find events near me'];
+  }
 
   @override
   Stream<String> reply(List<ChatMessage> history) async* {
-    final question = history.lastWhere((message) => message.role == ChatRole.user).text;
-    try {
-      final response = await _client.post(
-        _apiUri.replace(path: '/api/network/ask', query: null, fragment: null),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'question': question}),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-        final citations = body['citations'] as List? ?? const [];
-        if (citations.isNotEmpty) {
-          yield body['answer'] as String? ?? '';
-          return;
+    final request = http.Request('POST', _uri('/api/assistant/chat'));
+    request.headers['Content-Type'] = 'application/json';
+    request.headers['Accept'] = 'text/event-stream';
+    request.body = jsonEncode({
+      'session_id': _sessionId,
+      'context': networkContext(),
+      'messages': [
+        for (final message in history) {'role': message.role.name, 'text': message.text},
+      ],
+    });
+    final response = await _client.send(request);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Assistant request failed (${response.statusCode})');
+    }
+
+    var buffer = '';
+    var received = false;
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      buffer = (buffer + chunk).replaceAll('\r\n', '\n');
+      while (buffer.contains('\n\n')) {
+        final split = buffer.indexOf('\n\n');
+        final raw = buffer.substring(0, split);
+        buffer = buffer.substring(split + 2);
+        for (final line in raw.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          final payload = line.substring(5).trim();
+          if (payload.isEmpty) continue;
+          final data = jsonDecode(payload);
+          if (data is! Map) continue;
+          final sessionId = data['session_id'];
+          if (sessionId is String && sessionId.isNotEmpty) _sessionId = sessionId;
+          final error = data['error'];
+          if (error != null) throw StateError(error.toString());
+          final delta = data['delta'];
+          if (delta is String && delta.isNotEmpty) {
+            received = true;
+            yield delta;
+          }
         }
       }
-    } catch (_) {
-      // Keep the local assistant available while the backend is offline.
     }
-    yield* fallback.reply(history);
+    if (!received) throw StateError('The assistant returned an empty reply.');
   }
+
+  @override
+  void reset() {
+    final sessionId = _sessionId;
+    _sessionId = null;
+    if (sessionId == null || sessionId.isEmpty) return;
+    unawaited(_client.delete(_uri('/api/assistant/sessions/$sessionId')).then((_) {}, onError: (_) {}));
+  }
+}
+
+/// A short snapshot of the local network, sent with the first live turn.
+String networkBrief({required List<Contact> contacts, required String userName}) {
+  final who = userName.trim().isEmpty ? 'The user' : userName.trim();
+  if (contacts.isEmpty) return '$who has not saved any contacts yet.';
+  final lines = contacts.take(20).map((contact) {
+    final role = switch ((contact.title.isNotEmpty, contact.company.isNotEmpty)) {
+      (true, true) => '${contact.title} at ${contact.company}',
+      (true, false) => contact.title,
+      (false, true) => contact.company,
+      _ => '',
+    };
+    final met = contact.metAt.isEmpty ? '' : ' Met at ${contact.metAt}.';
+    return '- ${contact.name}${role.isEmpty ? '' : ', $role'}.$met';
+  });
+  return '$who knows ${contacts.length} people:\n${lines.join('\n')}';
 }
 
 /// Stand-in used until the backend endpoint is wired up. Answers from the

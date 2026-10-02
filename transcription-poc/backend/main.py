@@ -11,6 +11,7 @@ from google.auth.exceptions import GoogleAuthError
 from google.genai.errors import APIError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from agent_chat import build_registry, router as assistant_router
 from database.session import AsyncSessionFactory
 from models import (
     CapabilitiesResponse,
@@ -37,8 +38,17 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     cors_origin_regex: str | None = r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
     max_upload_mb: int = 15
+    openai_api_key: str | None = None
+    openai_api: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(str(Path(__file__).resolve().parents[2] / ".env"), ".env"),
+        extra="ignore",
+    )
+
+    @property
+    def agents_api_key(self) -> str | None:
+        return self.openai_api_key or self.openai_api
 
     @property
     def parsed_cors_origins(self) -> list[str]:
@@ -63,9 +73,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         app.state.transcription_provider = provider
         app.state.summary_provider = provider
+        app.state.agent_registry = build_registry(active_settings.agents_api_key)
         try:
             yield
         finally:
+            registry = app.state.agent_registry
+            if registry is not None:
+                registry.close_all()
             if provider is not None:
                 await provider.close()
 
@@ -84,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(network_router)
     app.include_router(streaming_router)
+    app.include_router(assistant_router
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:

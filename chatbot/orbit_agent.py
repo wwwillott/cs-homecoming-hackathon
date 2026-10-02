@@ -86,7 +86,7 @@ class OrbitAgent:
         self.session_id: str | None = None
         self.client = client or OpenAI(api_key=api_key or load_api_key(), timeout=300.0)
 
-    def reply(self, history: list[dict]) -> Iterator[str]:
+    def reply(self, history: list[dict], *, context: str | None = None) -> Iterator[str]:
         """Stream the assistant reply for the latest user message in history.
 
         history items match the Flutter ChatMessage json: {role, text}.
@@ -103,11 +103,13 @@ class OrbitAgent:
                 f"{item.get('role', 'user')}: {item.get('text', '')}" for item in history[:-1]
             )
             latest = f"Conversation so far:\n{earlier}\n\nLatest message:\n{latest}"
-        yield from self.send(latest)
+        yield from self.send(latest, context=None if self.session_id else context)
 
-    def send(self, text: str) -> Iterator[str]:
+    def send(self, text: str, *, context: str | None = None) -> Iterator[str]:
         """Stream one user message. Creates the session on the first call."""
         message = self._prepare(text)
+        if context and context.strip() and self.session_id is None:
+            message = f"The user's network, for context:\n{context.strip()}\n\n{message}"
         if self.session_id is None:
             yield from self._start(message)
             return

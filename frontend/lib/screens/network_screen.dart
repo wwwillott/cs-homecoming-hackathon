@@ -8,6 +8,7 @@ import '../navigation.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/network_tree.dart';
 import 'contact_detail_screen.dart';
 
 class NetworkScreen extends StatefulWidget {
@@ -72,7 +73,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
             focusId: app.graphFocusId,
             onFocusChanged: (id) => _onFocus(app, id),
             controller: _graph,
-            fitPadding: EdgeInsets.fromLTRB(32, narrow ? 120 : 96, 32, narrow ? 190 : 60),
+            fitPadding: EdgeInsets.fromLTRB(32, narrow ? 120 : 96, narrow ? 32 : 190, narrow ? 220 : 60),
           ),
         ),
         Positioned(
@@ -93,7 +94,32 @@ class _NetworkScreenState extends State<NetworkScreen> {
             ),
           ),
         ),
-        if (!narrow) Positioned(right: 20, bottom: 24, child: _ZoomControls(controller: _graph)),
+        if (!narrow)
+          Positioned(
+            right: 20,
+            bottom: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _ZoomControls(controller: _graph),
+                const SizedBox(height: 14),
+                const NetworkTreeBadge(),
+              ],
+            ),
+          )
+        else
+          Positioned(
+            right: 16,
+            bottom: 142,
+            child: IgnorePointer(
+              ignoring: focus != null,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 250),
+                opacity: focus != null ? 0 : 1,
+                child: const NetworkTreeBadge(width: 76),
+              ),
+            ),
+          ),
         Positioned(
           left: narrow ? 14 : 24,
           bottom: narrow ? 14 : 24,
