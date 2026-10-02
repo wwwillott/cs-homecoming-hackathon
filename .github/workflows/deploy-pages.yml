@@ -39,6 +39,9 @@ jobs:
           ORBIT_API_URL: ${{ vars.ORBIT_API_URL || 'https://spruce-api-hfqi.onrender.com' }}
         run: |
           flutter build web --release --base-href=/ \
+            --pwa-strategy=none \
+            --build-number="${{ github.run_number }}" \
+            --build-name="1.0.${{ github.run_number }}" \
             --dart-define=ORBIT_API_URL="$ORBIT_API_URL"
 
       - name: Add custom domain CNAME
