@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../navigation.dart';
+import '../services/mic_permission.dart';
 import '../services/recap_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -69,6 +70,21 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
 
   Future<void> _start() async {
     if (!mounted || _phase == _Phase.recording) return;
+    // First await after the tap must be getUserMedia, or Chrome will not prompt.
+    final micAllowed = await ensureMicrophonePermission();
+    if (!mounted) return;
+    if (!micAllowed) {
+      setState(() {
+        _phase = _Phase.error;
+        _error =
+            'Microphone access is blocked. Click the lock icon next to the URL, '
+            'set Microphone to Allow, reload, and try again.';
+      });
+      return;
+    }
+
+    final service = AppScope.read(context).recapService;
+    _recapService = service;
     setState(() {
       _phase = _Phase.recording;
       _elapsed = Duration.zero;
@@ -78,20 +94,20 @@ class _CaptureScreenState extends State<CaptureScreen> with TickerProviderStateM
       _connectionMessage = 'Connecting…';
       _hasGap = false;
     });
-    final service = AppScope.read(context).recapService;
-    _recapService = service;
-    await _progressSubscription?.cancel();
-    _progressSubscription = service.progress.listen(_onProgress);
-    await _levelSubscription?.cancel();
-    _targetLevel = 0;
-    _levelSubscription = service.inputLevel.listen((level) => _targetLevel = level);
     try {
+      await _progressSubscription?.cancel();
+      _progressSubscription = service.progress.listen(_onProgress);
+      await _levelSubscription?.cancel();
+      _targetLevel = 0;
+      _levelSubscription = service.inputLevel.listen((level) => _targetLevel = level);
       await service.start(kind: _kind);
       _pulse.repeat();
       if (_ticker.isActive) _ticker.stop();
       _lastTick = Duration.zero;
       _ticker.start();
     } catch (error) {
+      await _levelSubscription?.cancel();
+      _targetLevel = 0;
       await service.cancel();
       if (!mounted) return;
       setState(() {

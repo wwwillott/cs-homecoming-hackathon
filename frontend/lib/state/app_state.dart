@@ -15,6 +15,7 @@ import '../services/auth_service.dart';
 import '../services/network_tree_service.dart';
 import '../services/recap_service.dart';
 import '../services/streaming_recap_service.dart';
+import '../utils/ids.dart';
 
 enum AppTab { home, people, network, grow }
 
@@ -194,6 +195,12 @@ class AppState extends ChangeNotifier {
     demoMode = prefs.getBool(_kDemo) ?? false;
     userId = prefs.getString(_kSessionUserId);
     username = prefs.getString(_kSessionUsername);
+    // Older offline sessions used ids like "local-guest" which the API rejects.
+    if (userId != null && !isUuid(userId)) {
+      final repaired = localUserIdFor(username ?? userId!);
+      userId = repaired;
+      await prefs.setString(_kSessionUserId, repaired);
+    }
     if (isSignedIn) {
       await _loadUserData(prefs);
       await refreshTrees();

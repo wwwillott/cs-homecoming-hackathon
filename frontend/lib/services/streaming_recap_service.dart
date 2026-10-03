@@ -8,8 +8,11 @@ import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/contact.dart';
+import '../utils/ids.dart';
 import 'api_config.dart';
+import 'mic_permission.dart';
 import 'recap_service.dart';
+import 'ws_connect.dart';
 
 class ApiRecapService implements RecapService {
   ApiRecapService({
@@ -59,11 +62,12 @@ class ApiRecapService implements RecapService {
   Uri get _webSocketUri {
     final scheme = _apiUri.scheme == 'https' ? 'wss' : 'ws';
     final id = _userId?.call();
-    return _apiUri.replace(
+    return Uri(
       scheme: scheme,
+      host: _apiUri.host,
+      port: _apiUri.hasPort ? _apiUri.port : null,
       path: '/api/transcriptions/stream',
-      queryParameters: id == null || id.isEmpty ? const {} : {'user_id': id},
-      fragment: null,
+      queryParameters: isUuid(id) ? {'user_id': id!} : null,
     );
   }
 
@@ -72,17 +76,40 @@ class ApiRecapService implements RecapService {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (_userId?.call() case final id? when id.isNotEmpty) 'X-User-Id': id,
+        if (_userId?.call() case final id? when isUuid(id)) 'X-User-Id': id,
       };
+
+  /// Render free instances sleep; hit HTTP first so the WebSocket upgrade
+  /// does not race a cold start.
+  Future<void> _wakeApi() async {
+    final health = _api('/api/health');
+    try {
+      final response = await _client
+          .get(health)
+          .timeout(const Duration(seconds: 90));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError('API health check returned ${response.statusCode}');
+      }
+    } on Object catch (error) {
+      throw StateError(
+        'Could not wake the transcription API at ${health.host}. '
+        'Wait a moment and try again. ($error)',
+      );
+    }
+  }
 
   @override
   Future<void> start({required RecapKind kind}) async {
-    await cancel();
-    if (!await _recorder.hasPermission()) {
+    // Request mic before any other awaits so Chrome still treats this as a
+    // user gesture and shows the permission prompt.
+    if (!await ensureMicrophonePermission()) {
       throw StateError(
-        'Microphone permission is required to record a conversation.',
+        'Microphone access is blocked. Click the lock icon next to the URL, '
+        'set Microphone to Allow, reload, and try again. '
+        'If you opened /phone.html, use spruce.my instead.',
       );
     }
+    await cancel();
     _kind = kind;
     _active = true;
     _stopping = false;
@@ -95,6 +122,10 @@ class ApiRecapService implements RecapService {
     _recentAcknowledged.clear();
     _carry.clear();
     _complete = Completer<void>();
+    _emit(message: 'Waking transcription API…');
+    await _wakeApi();
+    if (!_active) return;
+    _emit(message: 'Connecting live transcription…');
     await _connect();
 
     final audio = await _recorder.startStream(
@@ -117,7 +148,8 @@ class ApiRecapService implements RecapService {
     if (!_active) return;
     _socketReady = false;
     _ready = Completer<void>();
-    final channel = WebSocketChannel.connect(_webSocketUri);
+    final uri = _webSocketUri;
+    final channel = connectOrbitWebSocket(uri);
     _channel = channel;
     _socketSubscription = channel.stream.listen(
       (message) => _handleSocketMessage(channel, message),
@@ -125,14 +157,24 @@ class ApiRecapService implements RecapService {
       onDone: () => _handleSocketClosed(channel),
       cancelOnError: true,
     );
-    await channel.ready;
+    try {
+      await channel.ready.timeout(const Duration(seconds: 60));
+    } on Object catch (error) {
+      await _socketSubscription?.cancel();
+      _socketSubscription = null;
+      _channel = null;
+      throw StateError(
+        'Could not open WebSocket to ${uri.host}${uri.path}. '
+        'Hard-refresh the page (Cmd+Shift+R) and try again. ($error)',
+      );
+    }
     channel.sink.add(
       jsonEncode({
         'type': 'start',
         if (_sessionId != null) 'session_id': _sessionId,
       }),
     );
-    await _ready!.future.timeout(const Duration(seconds: 10));
+    await _ready!.future.timeout(const Duration(seconds: 30));
   }
 
   void _handleSocketMessage(WebSocketChannel source, dynamic message) {
@@ -219,9 +261,14 @@ class ApiRecapService implements RecapService {
     _emit(message: 'Connection lost. Buffering audio and reconnecting…');
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 1), () {
-      _connect().catchError((Object reconnectError) {
-        _handleSocketClosed(source, reconnectError);
-      });
+      () async {
+        try {
+          await _wakeApi();
+          await _connect();
+        } catch (reconnectError) {
+          _handleSocketClosed(source, reconnectError);
+        }
+      }();
     });
   }
 

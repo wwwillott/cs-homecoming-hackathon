@@ -15,7 +15,7 @@ from google.api_core.client_options import ClientOptions
 from google.cloud import speech_v2
 from google.cloud.speech_v2.types import cloud_speech
 
-from database.models import TranscriptionSessionStatus
+from database.models import TranscriptionSessionStatus, User
 from transcription_store import (
     canonical_transcript,
     create_or_resume_session,
@@ -250,13 +250,21 @@ async def stream_transcription(websocket: WebSocket) -> None:
         initial = await websocket.receive_json()
         if initial.get("type") != "start":
             raise ValueError("The first message must be a start event.")
-        user_id = UUID(
-            websocket.query_params.get("user_id")
-            or os.getenv("DEVELOPMENT_USER_ID", "00000000-0000-0000-0000-000000000001")
+        raw_user_id = websocket.query_params.get("user_id") or os.getenv(
+            "DEVELOPMENT_USER_ID", "00000000-0000-0000-0000-000000000001"
         )
+        try:
+            user_id = UUID(raw_user_id)
+        except ValueError as error:
+            raise ValueError(
+                "user_id must be a UUID. Sign out and sign in again to refresh your session."
+            ) from error
         requested_session_id = UUID(initial["session_id"]) if initial.get("session_id") else None
         person_id = UUID(initial["person_id"]) if initial.get("person_id") else None
         async with session_factory() as db:
+            if await db.get(User, user_id) is None:
+                db.add(User(id=user_id))
+                await db.commit()
             transcription_session = await create_or_resume_session(
                 db,
                 user_id,
