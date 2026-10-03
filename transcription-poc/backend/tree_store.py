@@ -21,6 +21,7 @@ from database.models import (
     PersonOrganization,
     PersonTopic,
     TopicKind,
+    User,
 )
 SHARE_TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 SNAPSHOT_TTL = timedelta(hours=24)
@@ -156,6 +157,12 @@ async def serialize_tree(session: AsyncSession, tree: NetworkTree) -> dict[str, 
     embedding_by_person = {chunk.person_id: chunk for chunk in chunks if chunk.person_id}
 
     self_name = next((person.name for person in people if person.is_self), None)
+    owner = await session.get(User, tree.owner_user_id)
+    source_username = (owner.username or "").strip() if owner is not None else ""
+    display_name = source_username or (self_name or "").strip()
+    if not display_name or display_name.casefold() in {"my network", "shared network"}:
+        display_name = source_username or "Friend"
+
     people_payload = []
     for person in people:
         person_topics = topics_by_person.get(person.id, [])
@@ -214,7 +221,8 @@ async def serialize_tree(session: AsyncSession, tree: NetworkTree) -> dict[str, 
         "source_user_id": str(tree.owner_user_id),
         "source_tree_id": str(tree.id),
         "label": tree.label,
-        "source_display_name": self_name or tree.label,
+        "source_username": source_username or None,
+        "source_display_name": display_name,
         "people": people_payload,
         "connections": [
             {
@@ -262,7 +270,18 @@ async def import_snapshot(
     provider: EmbeddingProvider | None,
 ) -> NetworkTree:
     payload = snapshot.payload_json
-    display_name = str(payload.get("source_display_name") or "Shared network")
+    owner = await session.get(User, snapshot.source_user_id)
+    username = ""
+    if owner is not None and owner.username:
+        username = owner.username.strip()
+    if not username:
+        username = str(payload.get("source_username") or "").strip()
+
+    raw_display = str(payload.get("source_display_name") or "").strip()
+    if raw_display.casefold() in {"", "my network", "shared network"}:
+        raw_display = ""
+
+    display_name = username or raw_display or "Friend"
     tree = NetworkTree(
         owner_user_id=receiver_user_id,
         attributed_user_id=UUID(str(payload["source_user_id"])),

@@ -28,10 +28,13 @@ class NetworkTree {
     final username = attributedUsername?.trim();
     if (username != null && username.isNotEmpty) return username;
     final trimmed = label.trim();
-    if (trimmed.endsWith("'s network") && trimmed.length > 10) {
-      return trimmed.substring(0, trimmed.length - 10).trim();
+    if (trimmed.toLowerCase().endsWith("'s network") && trimmed.length > 10) {
+      final prefix = trimmed.substring(0, trimmed.length - "'s network".length).trim();
+      if (prefix.isNotEmpty && prefix.toLowerCase() != 'my network') return prefix;
+      return 'Them';
     }
-    return trimmed;
+    if (trimmed.isNotEmpty && trimmed.toLowerCase() != 'my network') return trimmed;
+    return 'Them';
   }
 }
 

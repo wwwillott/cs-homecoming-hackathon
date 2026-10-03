@@ -107,10 +107,23 @@ def tree_response(tree: NetworkTree, *, attributed_username: str | None = None) 
 async def attributed_username_for(
     session: AsyncSession, tree: NetworkTree
 ) -> str | None:
-    if tree.attributed_user_id is None:
-        return None
-    user = await session.get(User, tree.attributed_user_id)
-    return user.username if user is not None else None
+    if tree.attributed_user_id is not None:
+        user = await session.get(User, tree.attributed_user_id)
+        if user is not None and user.username:
+            return user.username
+    return username_from_tree_label(tree.label)
+
+
+def username_from_tree_label(label: str | None) -> str | None:
+    trimmed = (label or "").strip()
+    suffix = "'s network"
+    if trimmed.lower().endswith(suffix) and len(trimmed) > len(suffix):
+        prefix = trimmed[: -len(suffix)].strip()
+        if prefix and prefix.casefold() != "my network":
+            return prefix
+    if trimmed and trimmed.casefold() != "my network":
+        return trimmed
+    return None
 
 
 async def tree_response_async(

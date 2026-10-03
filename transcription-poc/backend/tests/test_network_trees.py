@@ -47,6 +47,13 @@ def test_export_import_remaps_ids_and_omits_transcripts() -> None:
 
     with database_client() as client:
         cast(FastAPI, client.app).state.summary_provider = FakeNetworkProvider()
+        registered = client.post(
+            "/api/auth/register",
+            json={"username": "maya", "password": "secret"},
+        )
+        assert registered.status_code == 201
+        sharer = {"X-User-Id": registered.json()["user_id"]}
+
         maya = _profiled_person(client, sharer, "Maya", "Robotics")
         trees = client.get("/api/network-trees", headers=sharer)
         assert trees.status_code == 200
@@ -66,6 +73,8 @@ def test_export_import_remaps_ids_and_omits_transcripts() -> None:
         attached = imported.json()
         assert attached["is_read_only"] is True
         assert attached["is_primary"] is False
+        assert attached["attributed_username"] == "maya"
+        assert attached["label"] == "maya's network"
 
         copied = client.get(f"/api/people?tree_id={attached['id']}", headers=receiver)
         assert copied.status_code == 200

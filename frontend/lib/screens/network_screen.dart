@@ -921,7 +921,7 @@ class _ShareTreeSheetState extends State<_ShareTreeSheet> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString().replaceFirst('Bad state: ', '');
+        _error = _friendlyNetworkError(error);
         _loading = false;
       });
     }
@@ -1035,7 +1035,7 @@ class _JoinTreeSheetState extends State<_JoinTreeSheet> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString().replaceFirst('Bad state: ', '');
+        _error = _friendlyNetworkError(error);
         _loading = false;
       });
     }
@@ -1054,7 +1054,7 @@ class _JoinTreeSheetState extends State<_JoinTreeSheet> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.toString().replaceFirst('Bad state: ', '');
+        _error = _friendlyNetworkError(error);
         _loading = false;
       });
     }
@@ -1167,4 +1167,16 @@ class _ShareCodePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ShareCodePainter oldDelegate) =>
       oldDelegate.token != token || oldDelegate.color != color;
+}
+
+String _friendlyNetworkError(Object error) {
+  final raw = error.toString().replaceFirst('Bad state: ', '');
+  final lower = raw.toLowerCase();
+  if (lower.contains('failed to fetch') ||
+      lower.contains('clientexception') ||
+      lower.contains('xmlhttprequest') ||
+      lower.contains('network error')) {
+    return 'Could not reach the sharing API. Wait a few seconds for the server to wake up, then try again.';
+  }
+  return raw;
 }
